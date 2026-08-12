@@ -1,0 +1,74 @@
+Monte Carlo Rocket Trajectory and Flight-Performance Simulation
+Generated: 12-Aug-2026 17:07:46
+
+Simulation configuration
+Launches: 100000
+Random seed: 120826
+Integrator time step: 0.100 s
+Maximum modeled flight time: 240.0 s
+Trajectory history sample count: 600
+
+Mission outcome
+Successful launches: 84190 of 100000 (84.19%)
+Terminal impacts: 100000 of 100000 (100.00%)
+
+Mission limits
+Apogee: 3500 to 18000 m
+Downrange: 500 to 12000 m
+Maximum dynamic pressure: 60.0 kPa
+Maximum acceleration: 15.00 g
+
+Terminal-flight performance statistics
+Metric                                    Mean    Std Dev        P05        P50        P95
+Apogee (m)                            7612.485   2282.636   4365.365   7350.024  11730.048
+Downrange (m)                         6537.797   2548.899   2763.368   6315.571  11059.233
+Maximum velocity (m/s)                 330.841     58.343    246.042    325.327    434.565
+Maximum acceleration (m/s^2)            18.157      3.214     13.744     17.714     24.063
+Maximum dynamic pressure (Pa)        49298.982   9913.466  34942.813  48278.075  67053.023
+Flight time (s)                         93.746     13.307     72.887     93.138    116.482
+Fuel consumed (kg)                      16.998      1.992     13.710     17.006     20.278
+Impact speed (m/s)                     277.771     28.278    234.974    275.793    327.288
+
+Failure criteria counts
+apogeeTooLow                       1197    1.20%
+apogeeTooHigh                        77    0.08%
+rangeTooShort                        12    0.01%
+rangeTooLong                       2857    2.86%
+dynamicPressureExceeded           13527   13.53%
+accelerationExceeded                  0    0.00%
+noImpact                              0    0.00%
+numericalFailure                      0    0.00%
+timedOut                              0    0.00%
+
+Top sensitivity inputs
+ 1. launchAngle_deg              maximum |r| = 0.7381
+ 2. propellantMass_kg            maximum |r| = 0.7094
+ 3. initialMass_kg               maximum |r| = 0.6833
+ 4. ballisticCoefficient_kgpm2   maximum |r| = 0.5039
+ 5. thrust_N                     maximum |r| = 0.4783
+ 6. dragCoefficient              maximum |r| = 0.4699
+ 7. burnRate_kgps                maximum |r| = 0.3904
+ 8. referenceArea_m2             maximum |r| = 0.3163
+ 9. specificImpulse_s            maximum |r| = 0.2827
+10. densityMultiplier            maximum |r| = 0.1517
+
+Representative trajectories
+Best overall performance
+Launch index: 41328, score: 91.371, success: 1
+Apogee: 10813.76 m, range: 6264.26 m, max velocity: 375.26 m/s, max acceleration: 2.452 g, max q: 39.883 kPa, impact speed: 239.80 m/s
+Angle: 79.288 deg, initial mass: 60.987 kg, propellant: 20.841 kg, thrust: 1365.49 N, Cd: 0.6232, wind: -10.146 m/s
+Worst overall performance
+Launch index: 30567, score: -157.691, success: 0
+Apogee: 28373.79 m, range: 28941.37 m, max velocity: 711.84 m/s, max acceleration: 2.734 g, max q: 72.564 kPa, impact speed: 355.39 m/s
+Angle: 75.687 deg, initial mass: 51.662 kg, propellant: 22.309 kg, thrust: 1534.25 N, Cd: 0.4608, wind: 5.649 m/s
+Median apogee representative
+Launch index: 31095, score: 72.718, success: 1
+Apogee: 7002.26 m, range: 5793.03 m, max velocity: 315.84 m/s, max acceleration: 1.849 g, max q: 46.810 kPa, impact speed: 270.49 m/s
+Angle: 78.712 deg, initial mass: 66.585 kg, propellant: 17.651 kg, thrust: 1497.06 N, Cd: 0.4712, wind: 3.029 m/s
+Median range representative
+Launch index: 20001, score: 82.457, success: 1
+Apogee: 12056.07 m, range: 6060.15 m, max velocity: 418.94 m/s, max acceleration: 2.139 g, max q: 57.518 kPa, impact speed: 311.78 m/s
+Angle: 82.488 deg, initial mass: 66.806 kg, propellant: 21.325 kg, thrust: 1609.81 N, Cd: 0.4221, wind: -1.460 m/s
+
+Saved self-contained data file: D:\Visual Studio Files\MATLAB Monte Carlo rocket trajectory\results\rocket_monte_carlo_results.mat
+The MAT file includes the complete per-launch randomized input data, per-launch result metrics and impact conditions, configuration, equations, statistics, sensitivity analysis, trajectory envelopes, sampled time histories, and detailed representative trajectories.
