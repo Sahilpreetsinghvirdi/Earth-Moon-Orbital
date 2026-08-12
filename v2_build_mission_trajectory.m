@@ -22,6 +22,18 @@ returnSegment = normalize_segment(returnSegment, 'Lunar departure and Earth retu
 trajectory = concatenate_segments(outbound, orbit, returnSegment);
 trajectory.burnEvents = struct('epoch', {result.candidate.launchEpoch, result.arrivalEpoch, result.departureEpoch, result.returnEpoch}, 'name', {'Earth departure', 'Lunar orbit insertion', 'Lunar departure', 'Earth capture'}, 'deltaV_mps', {result.departureDeltaV_mps, result.lunarOrbitInsertionDeltaV_mps, result.lunarDepartureDeltaV_mps, result.earthCaptureDeltaV_mps});
 trajectory.result = result;
+outboundCount = numel(outbound.time_s);
+orbitCount = numel(orbit.time_s);
+returnStartIndex = outboundCount + orbitCount + 1;
+trajectory.lunarSOIEntered = any(outbound.moonDistance_m <= config.physics.moonSOI_m);
+trajectory.lunarEncounterDistance_m = min(outbound.moonDistance_m);
+trajectory.earthArrivalDistance_m = trajectory.earthDistance_m(end);
+trajectory.earthArrivalSafe = trajectory.completed && ~trajectory.collision && trajectory.earthArrivalDistance_m <= config.physics.earthSOI_m;
+if outboundCount > 0 && orbitCount > 0 && returnStartIndex <= size(trajectory.position_m, 1)
+    trajectory.phaseBoundaryJumps_m = [norm(orbit.position_m(1, :) - outbound.position_m(end, :)), norm(returnSegment.position_m(1, :) - orbit.position_m(end, :))];
+else
+    trajectory.phaseBoundaryJumps_m = [nan, nan];
+end
 end
 
 function segment = normalize_segment(segment, phaseName)

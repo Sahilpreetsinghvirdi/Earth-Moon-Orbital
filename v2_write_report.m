@@ -44,4 +44,9 @@ fprintf(fileIdentifier, 'Lunar periapsis altitude: %.3f km\n', best.candidate.lu
 fprintf(fileIdentifier, 'Trajectory points: %d\n', numel(trajectory.time_s));
 fprintf(fileIdentifier, 'Trajectory completed: %d\n', trajectory.completed);
 fprintf(fileIdentifier, 'Trajectory collision: %d\n', trajectory.collision);
+fprintf(fileIdentifier, 'Lunar SOI entered: %d\n', trajectory.lunarSOIEntered);
+fprintf(fileIdentifier, 'Minimum lunar distance: %.3f km\n', trajectory.lunarEncounterDistance_m / 1000);
+fprintf(fileIdentifier, 'Earth arrival distance: %.3f km\n', trajectory.earthArrivalDistance_m / 1000);
+fprintf(fileIdentifier, 'Earth arrival safe within SOI: %d\n', trajectory.earthArrivalSafe);
+fprintf(fileIdentifier, 'Phase-boundary position jumps: %.3f km, %.3f km\n', trajectory.phaseBoundaryJumps_m(1) / 1000, trajectory.phaseBoundaryJumps_m(2) / 1000);
 end

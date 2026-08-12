@@ -18,9 +18,11 @@ assert(lambert.valid)
 assert(lambert.residual_s < 1)
 fuel = v2_calculate_fuel(10000, config.vehicle, config);
 assert(abs(fuel.rocketEquationResidual_mps) < 1e-8)
-candidate = struct('launchEpoch', config.searchStartEpoch, 'outboundFlightTime_days', 4, 'returnFlightTime_days', 4, 'lunarOrbitDuration_days', 1, 'lunarOrbitAltitude_m', 100000);
+candidate = struct('launchEpoch', config.searchStartEpoch, 'outboundFlightTime_days', 3, 'returnFlightTime_days', 3, 'lunarOrbitDuration_days', 1, 'lunarOrbitAltitude_m', 100000);
 candidateResult = v2_evaluate_candidate(candidate, config);
 assert(candidateResult.valid)
+assert(candidateResult.constraints.moonApproachValid)
+assert(candidateResult.constraints.moonDepartureOutwardValid)
 assert(candidateResult.moonArrivalState.epoch > candidateResult.moonLaunchState.epoch)
 assert(candidateResult.returnEpoch > candidateResult.arrivalEpoch)
 invalidCandidate = candidate;
@@ -32,6 +34,8 @@ assert(~isempty(optimization.bestResult))
 trajectory = v2_build_mission_trajectory(optimization.bestResult, config);
 assert(trajectory.completed)
 assert(~trajectory.collision)
+assert(trajectory.lunarSOIEntered)
+assert(trajectory.earthArrivalSafe)
 statePath = v2_save_mission_state(config, optimization, trajectory);
 assert(exist(statePath, 'file') == 2)
 [loadedState, ~] = v2_load_mission_state(config);

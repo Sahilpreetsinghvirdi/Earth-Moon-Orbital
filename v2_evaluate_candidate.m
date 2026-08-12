@@ -28,6 +28,8 @@ if ~outbound.valid
 end
 moonArrivalVelocity_mps = outbound.velocity2_mps - moonArrival.velocity_mps;
 outboundVInf_mps = norm(moonArrivalVelocity_mps);
+moonArrivalDirection_m = moonArrivalInterfacePosition_m - moonArrival.position_m;
+moonApproachValid = dot(moonArrivalVelocity_mps, moonArrivalDirection_m) < 0;
 departureDeltaV_mps = norm(outbound.velocity1_mps - earthParkingVelocity_mps);
 moonRadialDirection = -moonDeparture.position_m / norm(moonDeparture.position_m);
 moonInterfacePosition_m = moonDeparture.position_m + moonRadialDirection * config.physics.moonSOI_m;
@@ -40,6 +42,8 @@ if ~returnTransfer.valid
     return
 end
 returnVInf_mps = norm(returnTransfer.velocity1_mps - moonDeparture.velocity_mps);
+moonDepartureDirection_m = moonInterfacePosition_m - moonDeparture.position_m;
+moonDepartureOutwardValid = dot(returnTransfer.velocity1_mps - moonDeparture.velocity_mps, moonDepartureDirection_m) > 0;
 periapsisRadius_m = config.physics.moonRadius_m + candidate.lunarOrbitAltitude_m;
 circularLunarSpeed_mps = sqrt(config.physics.muMoon_m3ps2 / periapsisRadius_m);
 insertionPeriapsisSpeed_mps = sqrt(outboundVInf_mps ^ 2 + 2 * config.physics.muMoon_m3ps2 / periapsisRadius_m);
@@ -59,8 +63,11 @@ constraints = struct;
 constraints.outboundLambertValid = outbound.valid;
 constraints.returnLambertValid = returnTransfer.valid;
 constraints.departureOutwardValid = dot(outbound.velocity1_mps, earthParkingRadialDirection) > 0;
+constraints.moonApproachValid = moonApproachValid;
+constraints.moonDepartureOutwardValid = moonDepartureOutwardValid;
 constraints.lunarPeriapsisValid = candidate.lunarOrbitAltitude_m >= config.mission.minimumLunarPeriapsisAltitude_m && candidate.lunarOrbitAltitude_m <= config.mission.maximumLunarPeriapsisAltitude_m;
 constraints.lunarApoapsisValid = candidate.lunarOrbitAltitude_m <= config.mission.maximumLunarApoapsisAltitude_m;
+constraints.lunarOrbitDurationValid = candidate.lunarOrbitDuration_days >= config.mission.minimumLunarOrbitDuration_days;
 constraints.returnSpeedValid = arrivalSpeed_mps <= config.mission.maximumEarthArrivalSpeed_mps;
 constraints.deltaVValid = totalDeltaV_mps <= config.vehicle.maxMissionDeltaV_mps;
 constraints.fuelCapacityValid = fuel.withinVehicleCapacity;
@@ -93,6 +100,8 @@ result = populate_result(result);
         output.returnLambert = returnTransfer;
         output.outboundVInf_mps = outboundVInf_mps;
         output.returnVInf_mps = returnVInf_mps;
+        output.moonApproachValid = moonApproachValid;
+        output.moonDepartureOutwardValid = moonDepartureOutwardValid;
         output.departureDeltaV_mps = departureDeltaV_mps;
         output.lunarOrbitInsertionDeltaV_mps = insertionDeltaV_mps;
         output.lunarDepartureDeltaV_mps = departureDeltaVLunar_mps;
