@@ -142,9 +142,15 @@ end
         set(currentPathHandle, 'XData', currentX(1:currentPointCount), 'YData', currentY(1:currentPointCount))
         set(rocketHandle, 'XData', currentX(currentPointCount), 'YData', currentY(currentPointCount))
         completedCount = numel(trialResults);
-        encounters = nnz([trialResults.moonEncounter]);
-        captures = nnz([trialResults.lunarCapture]);
-        orbits = nnz([trialResults.lunarOrbit]);
+        if isempty(trialResults)
+            encounters = 0;
+            captures = 0;
+            orbits = 0;
+        else
+            encounters = nnz([trialResults.moonEncounter]);
+            captures = nnz([trialResults.lunarCapture]);
+            orbits = nnz([trialResults.lunarOrbit]);
+        end
         infoText = sprintf('EARTH-MOON MONTE CARLO\n\nTrial:              %d / %d\nSimulation Time:    %.3f days\nRocket Altitude:    %.0f km\nRocket Velocity:    %.0f m/s\nMoon Distance:      %.0f km\nMoon Relative V:    %.0f m/s\nEarth Escape:       %s\nMoon SOI:           %s\nLunar Capture:      %s\n\nCompleted Trials:   %d\nMoon Encounters:    %d\nLunar Captures:     %d\nLunar Orbits:       %d', trialIndex, config.trialCount, state.time_s / 86400, state.altitude_m / 1000, norm(state.velocity_mps), state.moonDistance_m / 1000, state.moonRelativeSpeed_mps, yes_no(state.earthSpecificEnergy_Jkg > 0 && norm(state.position_m) >= config.earth.escapeCheckRadius_m), yes_no(state.moonDistance_m <= config.moon.sphereOfInfluence_m), yes_no(state.moonSpecificEnergy_Jkg < 0 && state.moonDistance_m <= config.moon.sphereOfInfluence_m), completedCount, encounters, captures, orbits);
         set(infoHandle, 'String', infoText)
         drawnow limitrate
