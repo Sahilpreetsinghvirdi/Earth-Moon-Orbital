@@ -36,6 +36,8 @@ fprintf(fileIdentifier, 'Moon arrival: %s\n', char(best.arrivalEpoch));
 fprintf(fileIdentifier, 'Lunar approach: %s to %s for %.3f days\n', char(best.arrivalEpoch), char(best.insertionEpoch), best.candidate.lunarApproachDuration_days);
 fprintf(fileIdentifier, 'Lunar orbit: %s to %s for %.3f days\n', char(best.insertionEpoch), char(best.departureEpoch), best.candidate.lunarOrbitDuration_days);
 fprintf(fileIdentifier, 'Earth return: %s\n', char(best.returnEpoch));
+fprintf(fileIdentifier, 'Propagated lunar departure: %s\n', char(trajectory.actualDepartureEpoch));
+fprintf(fileIdentifier, 'Propagated Earth arrival: %s\n', char(trajectory.actualEarthArrivalEpoch));
 fprintf(fileIdentifier, 'Mission score: %.8f\n', best.score);
 fprintf(fileIdentifier, 'Total delta-v: %.3f m/s\n', best.totalDeltaV_mps);
 fprintf(fileIdentifier, 'Estimated fuel: %.3f kg\n', best.fuel.requiredPropellant_kg);
@@ -57,7 +59,8 @@ fprintf(fileIdentifier, 'Lunar orbit minimum distance: %.3f km\n', trajectory.lu
 fprintf(fileIdentifier, 'Lunar orbit propagated periapsis altitude: %.3f km\n', trajectory.lunarOrbitPeriapsisAltitude_m / 1000);
 fprintf(fileIdentifier, 'Lunar orbit bound and valid: %d, %d\n', trajectory.lunarOrbitBound, trajectory.lunarOrbitValid);
 fprintf(fileIdentifier, 'Earth arrival distance: %.3f km\n', trajectory.earthArrivalDistance_m / 1000);
-fprintf(fileIdentifier, 'Earth arrival safe within SOI: %d\n', trajectory.earthArrivalSafe);
+fprintf(fileIdentifier, 'Earth arrival target error: %.3f km\n', trajectory.earthArrivalTargetError_m / 1000);
+fprintf(fileIdentifier, 'Earth arrival safe near target: %d\n', trajectory.earthArrivalSafe);
 fprintf(fileIdentifier, 'Phase-boundary position jumps: %.3f km, %.3f km, %.3f km\n', trajectory.phaseBoundaryJumps_m(1) / 1000, trajectory.phaseBoundaryJumps_m(2) / 1000, trajectory.phaseBoundaryJumps_m(3) / 1000);
 fprintf(fileIdentifier, 'Capture burn duration: %.1f s\n', config.mission.captureBurnDuration_s);
 fprintf(fileIdentifier, 'Departure burn duration: %.1f s\n', config.mission.departureBurnDuration_s);

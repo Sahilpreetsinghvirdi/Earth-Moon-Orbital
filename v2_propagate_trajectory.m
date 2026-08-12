@@ -1,9 +1,15 @@
-function trajectory = v2_propagate_trajectory(config, startEpoch, initialState, duration_s, phaseName, callback, stopFunction)
+function trajectory = v2_propagate_trajectory(config, startEpoch, initialState, duration_s, phaseName, callback, stopFunction, targetVelocity_mps, targetBurnDuration_s)
 if nargin < 6 || isempty(callback)
     callback = @(~) true;
 end
 if nargin < 7 || isempty(stopFunction)
     stopFunction = @() false;
+end
+if nargin < 8
+    targetVelocity_mps = [];
+end
+if nargin < 9 || isempty(targetBurnDuration_s)
+    targetBurnDuration_s = 0;
 end
 step_s = config.integrator.highFidelityStep_s;
 stepCount = min(ceil(duration_s / step_s) + 1, config.integrator.maxSteps);
@@ -27,7 +33,7 @@ while currentTime_s <= duration_s + 1e-6 && writeIndex < stepCount
         break
     end
     currentEpoch = startEpoch + seconds(currentTime_s);
-    [acceleration, diagnostics] = v2_acceleration(config, currentEpoch, position, velocity);
+    [acceleration, diagnostics] = step_acceleration(currentTime_s, currentEpoch, position, velocity);
     writeIndex = writeIndex + 1;
     time_s(writeIndex) = currentTime_s;
     epoch(writeIndex) = currentEpoch;
@@ -54,7 +60,7 @@ while currentTime_s <= duration_s + 1e-6 && writeIndex < stepCount
     if dt_s <= 0
         break
     end
-    [position, velocity] = rk4_step(currentEpoch, position, velocity, dt_s);
+    [position, velocity] = rk4_step(currentTime_s, currentEpoch, position, velocity, dt_s);
     currentTime_s = currentTime_s + dt_s;
 end
 trajectory = struct;
@@ -75,13 +81,22 @@ if writeIndex > 0
     trajectory.collision = trajectory.earthDistance_m(end) <= config.physics.earthRadius_m || trajectory.moonDistance_m(end) <= config.physics.moonRadius_m;
 end
 
-    function [nextPosition, nextVelocity] = rk4_step(currentEpoch, currentPosition, currentVelocity, dt)
-        [k1, ~] = v2_acceleration(config, currentEpoch, currentPosition, currentVelocity);
-        [k2, ~] = v2_acceleration(config, currentEpoch + seconds(dt / 2), currentPosition + currentVelocity * dt / 2, currentVelocity + k1 * dt / 2);
-        [k3, ~] = v2_acceleration(config, currentEpoch + seconds(dt / 2), currentPosition + (currentVelocity + k1 * dt / 2) * dt / 2, currentVelocity + k2 * dt / 2);
-        [k4, ~] = v2_acceleration(config, currentEpoch + seconds(dt), currentPosition + (currentVelocity + k2 * dt / 2) * dt, currentVelocity + k3 * dt);
+    function [nextPosition, nextVelocity] = rk4_step(timeValue_s, currentEpoch, currentPosition, currentVelocity, dt)
+        [k1, ~] = step_acceleration(timeValue_s, currentEpoch, currentPosition, currentVelocity);
+        [k2, ~] = step_acceleration(timeValue_s + dt / 2, currentEpoch + seconds(dt / 2), currentPosition + currentVelocity * dt / 2, currentVelocity + k1 * dt / 2);
+        [k3, ~] = step_acceleration(timeValue_s + dt / 2, currentEpoch + seconds(dt / 2), currentPosition + (currentVelocity + k1 * dt / 2) * dt / 2, currentVelocity + k2 * dt / 2);
+        [k4, ~] = step_acceleration(timeValue_s + dt, currentEpoch + seconds(dt), currentPosition + (currentVelocity + k2 * dt / 2) * dt, currentVelocity + k3 * dt);
         nextPosition = currentPosition + dt / 6 * (currentVelocity + 2 * (currentVelocity + k1 * dt / 2) + 2 * (currentVelocity + k2 * dt / 2) + (currentVelocity + k3 * dt));
         nextVelocity = currentVelocity + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4);
+    end
+
+    function [totalAcceleration, diagnostics] = step_acceleration(timeValue_s, currentEpoch, currentPosition, currentVelocity)
+        [totalAcceleration, diagnostics] = v2_acceleration(config, currentEpoch, currentPosition, currentVelocity);
+        if ~isempty(targetVelocity_mps) && targetBurnDuration_s > 0 && timeValue_s < targetBurnDuration_s
+            normalizedTime = min(1, max(0, timeValue_s / targetBurnDuration_s));
+            desiredDerivative = (6 * normalizedTime - 6 * normalizedTime ^ 2) * (targetVelocity_mps(:) - initialState.velocity_mps(:)) / targetBurnDuration_s;
+            totalAcceleration = desiredDerivative;
+        end
     end
 end
 

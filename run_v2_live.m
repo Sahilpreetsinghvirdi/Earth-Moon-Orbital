@@ -68,7 +68,7 @@ for frameIndex = 1:numel(frameIndices)
         title(axesHandle, 'V2 calculated trajectory replay')
         viewName = 'Earth-centered global view';
     end
-    info = sprintf('MISSION DATE\n%s\n\nElapsed: %.3f days\nVelocity: %.2f m/s\nEarth distance: %.2f km\nMoon distance: %.2f km\nCurrent delta-v: %.2f m/s\nPhase: %s\nView: %s', char(trajectory.epoch(index)), trajectory.time_s(index) / 86400, norm(trajectory.velocity_mps(index, :)), trajectory.earthDistance_m(index) / 1000, trajectory.moonDistance_m(index) / 1000, cumulative_delta_v(output.optimization.bestResult, trajectory.time_s(index)), char(trajectory.phase(index)), viewName);
+    info = sprintf('MISSION DATE\n%s\n\nElapsed: %.3f days\nVelocity: %.2f m/s\nEarth distance: %.2f km\nMoon distance: %.2f km\nCurrent delta-v: %.2f m/s\nPhase: %s\nView: %s', char(trajectory.epoch(index)), trajectory.time_s(index) / 86400, norm(trajectory.velocity_mps(index, :)), trajectory.earthDistance_m(index) / 1000, trajectory.moonDistance_m(index) / 1000, cumulative_delta_v(output.optimization.bestResult, trajectory.time_s(index), trajectory), char(trajectory.phase(index)), viewName);
     set(infoHandle, 'String', info)
     drawnow limitrate
     if index > 1
@@ -77,8 +77,18 @@ for frameIndex = 1:numel(frameIndices)
 end
 end
 
-function value = cumulative_delta_v(result, time_s)
+function value = cumulative_delta_v(result, time_s, trajectory)
 value = 0;
+if nargin >= 3 && isfield(trajectory, 'burnEvents') && ~isempty(trajectory.burnEvents)
+    startEpoch = trajectory.epoch(1);
+    for eventIndex = 1:numel(trajectory.burnEvents)
+        eventTime_s = seconds(trajectory.burnEvents(eventIndex).epoch - startEpoch);
+        if time_s >= eventTime_s
+            value = value + trajectory.burnEvents(eventIndex).deltaV_mps;
+        end
+    end
+    return
+end
 if ~isfield(result, 'candidate') || ~isfield(result, 'departureDeltaV_mps')
     return
 end

@@ -20,8 +20,10 @@ departureBurnDuration_s = min(config.mission.departureBurnDuration_s, duration_s
 if captureBurnDuration_s + departureBurnDuration_s > duration_s
     departureBurnDuration_s = max(0, duration_s - captureBurnDuration_s);
 end
-departureBurnStart_s = max(captureBurnDuration_s, duration_s - departureBurnDuration_s);
-stepCount = ceil(duration_s / step_s) + 1;
+nominalDuration_s = duration_s;
+maximumDuration_s = duration_s + config.mission.departurePhasingWindow_s;
+departureBurnStart_s = nan;
+stepCount = ceil(maximumDuration_s / step_s) + 1;
 time_s = nan(stepCount, 1);
 epoch = NaT(stepCount, 1, 'TimeZone', 'UTC');
 position_m = nan(stepCount, 3);
@@ -67,12 +69,19 @@ else
 end
 writeIndex = 0;
 currentTime_s = 0;
-while currentTime_s <= duration_s + 1e-6 && writeIndex < stepCount
+while currentTime_s <= maximumDuration_s + 1e-6 && writeIndex < stepCount
     if stopFunction()
         break
     end
     currentEpoch = startEpoch + seconds(currentTime_s);
     moon = v2_get_celestial_state(currentEpoch, 'moon', config, 'analytical');
+    if isnan(departureBurnStart_s) && currentTime_s >= nominalDuration_s
+        earthDirection = -moon.position_m / norm(moon.position_m);
+        radialDirection = relativePosition / max(norm(relativePosition), 1);
+        if dot(earthDirection, radialDirection) > 0 || currentTime_s >= maximumDuration_s - departureBurnDuration_s
+            departureBurnStart_s = currentTime_s;
+        end
+    end
     currentAcceleration = relative_acceleration(currentTime_s, relativePosition, relativeVelocity, currentEpoch, moon);
     writeIndex = writeIndex + 1;
     time_s(writeIndex) = currentTime_s;
@@ -94,20 +103,26 @@ while currentTime_s <= duration_s + 1e-6 && writeIndex < stepCount
     if moonDistance_m(writeIndex) <= config.physics.moonRadius_m
         break
     end
-    dt_s = min(step_s, duration_s - currentTime_s);
+    if ~isnan(departureBurnStart_s) && currentTime_s >= departureBurnStart_s + departureBurnDuration_s - 1e-6
+        break
+    end
+    dt_s = min(step_s, maximumDuration_s - currentTime_s);
     if dt_s <= 0
         break
     end
     [relativePosition, relativeVelocity] = rk4_step(currentTime_s, relativePosition, relativeVelocity, currentEpoch, dt_s);
     currentTime_s = currentTime_s + dt_s;
 end
-trajectory = struct('time_s', time_s(1:writeIndex), 'epoch', epoch(1:writeIndex), 'position_m', position_m(1:writeIndex, :), 'velocity_mps', velocity_mps(1:writeIndex, :), 'acceleration_mps2', acceleration_mps2(1:writeIndex, :), 'moonPosition_m', moonPosition_m(1:writeIndex, :), 'moonDistance_m', moonDistance_m(1:writeIndex), 'earthDistance_m', earthDistance_m(1:writeIndex), 'specificEnergyEarth_Jkg', specificEnergyEarth_Jkg(1:writeIndex), 'specificEnergyMoon_Jkg', specificEnergyMoon_Jkg(1:writeIndex), 'phase', phase(1:writeIndex), 'valid', valid(1:writeIndex), 'completed', writeIndex >= min(stepCount, ceil(duration_s / step_s)), 'collision', any(moonDistance_m(1:writeIndex) <= config.physics.moonRadius_m));
+completed = writeIndex > 0 && ~isnan(departureBurnStart_s) && time_s(writeIndex) >= departureBurnStart_s + departureBurnDuration_s - 1e-6;
+trajectory = struct('time_s', time_s(1:writeIndex), 'epoch', epoch(1:writeIndex), 'position_m', position_m(1:writeIndex, :), 'velocity_mps', velocity_mps(1:writeIndex, :), 'acceleration_mps2', acceleration_mps2(1:writeIndex, :), 'moonPosition_m', moonPosition_m(1:writeIndex, :), 'moonDistance_m', moonDistance_m(1:writeIndex), 'earthDistance_m', earthDistance_m(1:writeIndex), 'specificEnergyEarth_Jkg', specificEnergyEarth_Jkg(1:writeIndex), 'specificEnergyMoon_Jkg', specificEnergyMoon_Jkg(1:writeIndex), 'phase', phase(1:writeIndex), 'valid', valid(1:writeIndex), 'completed', completed, 'collision', any(moonDistance_m(1:writeIndex) <= config.physics.moonRadius_m), 'nominalDuration_s', nominalDuration_s, 'departureBurnStart_s', departureBurnStart_s, 'actualDuration_s', time_s(max(writeIndex, 1)));
 
     function value = phase_name(timeValue_s)
         if timeValue_s < captureBurnDuration_s
             value = "Lunar capture burn";
-        elseif timeValue_s >= departureBurnStart_s && departureBurnDuration_s > 0
+        elseif ~isnan(departureBurnStart_s) && timeValue_s >= departureBurnStart_s && departureBurnDuration_s > 0
             value = "Lunar departure burn";
+        elseif timeValue_s >= nominalDuration_s
+            value = "Lunar departure phasing";
         else
             value = "Lunar orbit";
         end
@@ -118,16 +133,15 @@ trajectory = struct('time_s', time_s(1:writeIndex), 'epoch', epoch(1:writeIndex)
         thrust = zeros(3, 1);
         if timeValue_s < captureBurnDuration_s && captureBurnDuration_s > 0
             thrust = smooth_velocity_derivative(captureInitialVelocity, captureTargetVelocity, timeValue_s, captureBurnDuration_s) - gravity;
-        elseif timeValue_s >= departureBurnStart_s && departureBurnDuration_s > 0
+        elseif ~isnan(departureBurnStart_s) && timeValue_s >= departureBurnStart_s && departureBurnDuration_s > 0
             if any(isnan(departureInitialVelocity))
                 departureInitialVelocity = currentVelocity;
-                departureDirection = targetRelativeDirection;
-                if isempty(departureDirection) || dot(departureDirection, currentPosition) <= 0
+                departureTargetRelativeVelocity = departureTargetVelocity_mps(:) - moon.velocity_mps;
+                if isempty(departureDirection) || dot(departureTargetRelativeVelocity, currentPosition) <= 0
                     departureDirection = currentPosition / norm(currentPosition);
+                    departureSpeed = norm(departureTargetRelativeVelocity);
+                    departureTargetRelativeVelocity = departureDirection * max(departureSpeed, sqrt(2 * config.physics.muMoon_m3ps2 / max(norm(currentPosition), 1)));
                 end
-                departureSpeed = norm(departureTargetVelocity_mps(:) - moon.velocity_mps);
-                desiredSpeed = sqrt(departureSpeed ^ 2 + 2 * config.physics.muMoon_m3ps2 / max(norm(currentPosition), 1));
-                departureTargetRelativeVelocity = departureDirection * desiredSpeed;
             end
             thrust = smooth_velocity_derivative(departureInitialVelocity, departureTargetRelativeVelocity, timeValue_s - departureBurnStart_s, departureBurnDuration_s) - gravity;
         end
