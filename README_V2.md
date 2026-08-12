@@ -34,6 +34,8 @@ The ephemeris adapter first attempts MATLAB Aerospace Toolbox `planetEphemeris` 
 
 The optimizer evaluates coarse dates, refines around the current best launch window, and performs a final sub-day search. It records the best launch date, Moon arrival, lunar orbit, Earth return, total delta-v, fuel estimate, score, candidates, successful candidates, iterations, and stopping reason.
 
+Lambert candidates are rejected when the spacecraft is moving in the wrong radial direction at lunar arrival or departure. The trajectory builder also reports Earth-arrival safety, lunar sphere-of-influence entry, and phase-boundary position jumps. The current mission model uses patched-conic Lambert handoffs with numerical Earth-Moon-Sun propagation inside each transfer and a numerical lunar two-body segment; reported phase-boundary jumps are an explicit limitation rather than hidden continuous dynamics.
+
 Run focused validation:
 
 ```matlab
