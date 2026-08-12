@@ -3,3 +3,8 @@ results/simulation_failure.txt
 live_error.log
 results_v2_test/
 results_v2_run/
+results/mission_state.mat
+results/v2_optimization_results.mat
+results/v2_mission_report.txt
+results/v2_optimization_dashboard.png
+results/v2_best_trajectory.png
