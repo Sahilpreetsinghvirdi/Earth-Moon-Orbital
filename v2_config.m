@@ -41,6 +41,7 @@ config.mission.lunarOrbitDuration_days = 1.0;
 config.mission.minimumLunarOrbitDuration_days = 0.25;
 config.mission.captureBurnDuration_s = 1800;
 config.mission.departureBurnDuration_s = 1800;
+config.mission.earthDepartureBurnDuration_s = 1800;
 config.mission.departurePhasingWindow_s = 21600;
 config.mission.earthTerminalCorrectionDuration_s = 21600;
 config.mission.earthTerminalBurnDuration_s = 1800;

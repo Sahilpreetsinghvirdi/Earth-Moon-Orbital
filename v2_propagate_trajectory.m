@@ -44,9 +44,13 @@ while currentTime_s <= duration_s + 1e-6 && writeIndex < stepCount
     moonDistance_m(writeIndex) = diagnostics.moonDistance_m;
     earthDistance_m(writeIndex) = norm(position);
     specificEnergyEarth_Jkg(writeIndex) = 0.5 * dot(velocity, velocity) - config.physics.muEarth_m3ps2 / max(norm(position), 1);
-    phase(writeIndex) = string(phaseName);
+    if ~isempty(targetVelocity_mps) && targetBurnDuration_s > 0 && currentTime_s < targetBurnDuration_s
+        phase(writeIndex) = string(phaseName) + " burn";
+    else
+        phase(writeIndex) = string(phaseName);
+    end
     valid(writeIndex) = all(isfinite([position; velocity; acceleration]));
-    state = struct('time_s', currentTime_s, 'epoch', currentEpoch, 'position_m', position, 'velocity_mps', velocity, 'acceleration_mps2', acceleration, 'moonPosition_m', diagnostics.moonPosition_m, 'moonDistance_m', diagnostics.moonDistance_m, 'earthDistance_m', norm(position), 'phase', phaseName, 'valid', valid(writeIndex));
+    state = struct('time_s', currentTime_s, 'epoch', currentEpoch, 'position_m', position, 'velocity_mps', velocity, 'acceleration_mps2', acceleration, 'moonPosition_m', diagnostics.moonPosition_m, 'moonDistance_m', diagnostics.moonDistance_m, 'earthDistance_m', norm(position), 'phase', phase(writeIndex), 'valid', valid(writeIndex));
     if ~callback(state)
         break
     end
@@ -92,7 +96,7 @@ end
 
     function [totalAcceleration, diagnostics] = step_acceleration(timeValue_s, currentEpoch, currentPosition, currentVelocity)
         [totalAcceleration, diagnostics] = v2_acceleration(config, currentEpoch, currentPosition, currentVelocity);
-        if ~isempty(targetVelocity_mps) && targetBurnDuration_s > 0 && timeValue_s < targetBurnDuration_s
+        if ~isempty(targetVelocity_mps) && targetBurnDuration_s > 0 && timeValue_s <= targetBurnDuration_s
             normalizedTime = min(1, max(0, timeValue_s / targetBurnDuration_s));
             desiredDerivative = (6 * normalizedTime - 6 * normalizedTime ^ 2) * (targetVelocity_mps(:) - initialState.velocity_mps(:)) / targetBurnDuration_s;
             totalAcceleration = desiredDerivative;

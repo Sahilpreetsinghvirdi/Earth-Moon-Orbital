@@ -42,6 +42,8 @@ assert(any(strcmp(trajectory.phase, 'Lunar capture burn')))
 assert(any(strcmp(trajectory.phase, 'Lunar departure burn')))
 assert(trajectory.lunarOrbitValid)
 assert(trajectory.lunarOrbitMinimumDistance_m < 10e6)
+assert(any(strcmp(trajectory.phase, 'Earth departure and lunar transfer burn')))
+assert(abs(norm(trajectory.velocity_mps(1, :)) - norm(candidateResult.earthParkingVelocity_mps)) < 1e-6)
 statePath = v2_save_mission_state(config, optimization, trajectory);
 assert(exist(statePath, 'file') == 2)
 [loadedState, ~] = v2_load_mission_state(config);

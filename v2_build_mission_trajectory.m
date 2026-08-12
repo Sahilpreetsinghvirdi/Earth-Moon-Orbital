@@ -8,8 +8,11 @@ end
 if isempty(result) || ~result.valid
     error('V2:InvalidBestResult', 'A valid mission result is required to build a trajectory.')
 end
-launchState = struct('position_m', result.earthParkingPosition_m, 'velocity_mps', result.outboundLambert.velocity1_mps);
-outbound = v2_propagate_trajectory(config, result.candidate.launchEpoch, launchState, result.candidate.outboundFlightTime_days * 86400, 'Earth departure and lunar transfer', callback, stopFunction);
+launchState = struct('position_m', result.earthParkingPosition_m, 'velocity_mps', result.earthParkingVelocity_mps);
+outboundDuration_s = result.candidate.outboundFlightTime_days * 86400;
+earthDepartureBurnDuration_s = min(config.mission.earthDepartureBurnDuration_s, outboundDuration_s / 4);
+earthDepartureTargetVelocity_mps = retarget_earth_departure(result, config, launchState, outboundDuration_s, earthDepartureBurnDuration_s);
+outbound = v2_propagate_trajectory(config, result.candidate.launchEpoch, launchState, outboundDuration_s, 'Earth departure and lunar transfer', callback, stopFunction, earthDepartureTargetVelocity_mps, earthDepartureBurnDuration_s);
 outboundFinalState = struct('position_m', outbound.position_m(end, :)', 'velocity_mps', outbound.velocity_mps(end, :)');
 if ~isfield(result.candidate, 'lunarApproachDuration_days')
     result.candidate.lunarApproachDuration_days = config.mission.lunarApproachDuration_days;
@@ -72,6 +75,33 @@ if outboundCount > 0 && approachCount > 0 && orbitCount > 0 && returnStartIndex 
     trajectory.phaseBoundaryJumps_m = [norm(approach.position_m(1, :) - outbound.position_m(end, :)), norm(orbit.position_m(1, :) - approach.position_m(end, :)), norm(returnSegment.position_m(1, :) - orbit.position_m(end, :))];
 else
     trajectory.phaseBoundaryJumps_m = [nan, nan, nan];
+end
+
+function targetVelocity_mps = retarget_earth_departure(result, config, launchState, outboundDuration_s, burnDuration_s)
+targetVelocity_mps = result.outboundLambert.velocity1_mps;
+if burnDuration_s <= 0 || outboundDuration_s <= burnDuration_s
+    return
+end
+arrivalMoon = v2_get_celestial_state(result.arrivalEpoch, 'moon', config, 'analytical');
+targetDirection_m = -arrivalMoon.position_m / max(norm(arrivalMoon.position_m), 1);
+targetPosition_m = arrivalMoon.position_m + targetDirection_m * config.physics.moonSOI_m;
+remainingDuration_s = outboundDuration_s - burnDuration_s;
+for iteration = 1:5
+    burn = v2_propagate_trajectory(config, result.candidate.launchEpoch, launchState, burnDuration_s, 'Earth departure and lunar transfer', [], @() false, targetVelocity_mps, burnDuration_s);
+    if isempty(burn.position_m)
+        break
+    end
+    burnEndState = struct('position_m', burn.position_m(end, :)', 'velocity_mps', burn.velocity_mps(end, :)');
+    transfer = v2_solve_lambert(burnEndState.position_m, targetPosition_m, remainingDuration_s, config.physics.muEarth_m3ps2, true);
+    if ~transfer.valid
+        break
+    end
+    if norm(transfer.velocity1_mps - targetVelocity_mps) < 1e-3
+        targetVelocity_mps = transfer.velocity1_mps;
+        break
+    end
+    targetVelocity_mps = transfer.velocity1_mps;
+end
 end
 
 function [solution, targetPosition_m] = select_return_lambert(config, departureEpoch, startPosition_m, startVelocity_mps, moonPosition_m, baseTargetPosition_m, timeOfFlight_s)

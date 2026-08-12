@@ -64,4 +64,5 @@ fprintf(fileIdentifier, 'Earth arrival safe near target: %d\n', trajectory.earth
 fprintf(fileIdentifier, 'Phase-boundary position jumps: %.3f km, %.3f km, %.3f km\n', trajectory.phaseBoundaryJumps_m(1) / 1000, trajectory.phaseBoundaryJumps_m(2) / 1000, trajectory.phaseBoundaryJumps_m(3) / 1000);
 fprintf(fileIdentifier, 'Capture burn duration: %.1f s\n', config.mission.captureBurnDuration_s);
 fprintf(fileIdentifier, 'Departure burn duration: %.1f s\n', config.mission.departureBurnDuration_s);
+fprintf(fileIdentifier, 'Earth departure burn duration: %.1f s\n', config.mission.earthDepartureBurnDuration_s);
 end
