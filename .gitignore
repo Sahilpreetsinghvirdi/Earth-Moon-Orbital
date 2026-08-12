@@ -1,3 +1,5 @@
 _smoke_test_figures/
 results/simulation_failure.txt
 live_error.log
+results_v2_test/
+results_v2_run/
