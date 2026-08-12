@@ -20,6 +20,12 @@ if isempty(output.trajectory.time_s)
 end
 config = output.config;
 trajectory = output.trajectory;
+if ~isfield(config.live, 'smoothPath')
+    config.live.smoothPath = true;
+end
+if ~isfield(config.live, 'smoothSamplesPerPoint')
+    config.live.smoothSamplesPerPoint = 4;
+end
 cameraMode = lower(string(cameraMode));
 figureHandle = figure('Name', 'V2 Live Earth-Moon Mission', 'NumberTitle', 'off', 'Color', 'w', 'Position', [60, 60, 1500, 850]);
 axesHandle = axes('Parent', figureHandle, 'Position', [0.06, 0.10, 0.62, 0.82]);
@@ -60,12 +66,14 @@ for frameIndex = 1:numel(frameIndices)
         relativePath_m = trajectory.position_m(1:index, :) - trajectory.moonPosition_m(1:index, :);
         set(earthHandle, 'XData', (-moonPosition_m(1) + config.physics.earthRadius_m * cos(bodyAngle)) / 1e6, 'YData', (-moonPosition_m(2) + config.physics.earthRadius_m * sin(bodyAngle)) / 1e6)
         set(moonHandle, 'XData', config.physics.moonRadius_m * cos(bodyAngle) / 1e6, 'YData', config.physics.moonRadius_m * sin(bodyAngle) / 1e6)
-        set(pathHandle, 'XData', relativePath_m(:, 1) / 1e6, 'YData', relativePath_m(:, 2) / 1e6)
+        [pathX, pathY] = rendered_path(relativePath_m, trajectory.time_s(1:index), config.live);
+        set(pathHandle, 'XData', pathX / 1e6, 'YData', pathY / 1e6)
         set(spacecraftHandle, 'XData', relativePath_m(end, 1) / 1e6, 'YData', relativePath_m(end, 2) / 1e6)
     else
         set(earthHandle, 'XData', config.physics.earthRadius_m * cos(bodyAngle) / 1e6, 'YData', config.physics.earthRadius_m * sin(bodyAngle) / 1e6)
         set(moonHandle, 'XData', (moonPosition_m(1) + config.physics.moonRadius_m * cos(bodyAngle)) / 1e6, 'YData', (moonPosition_m(2) + config.physics.moonRadius_m * sin(bodyAngle)) / 1e6)
-        set(pathHandle, 'XData', trajectory.position_m(1:index, 1) / 1e6, 'YData', trajectory.position_m(1:index, 2) / 1e6)
+        [pathX, pathY] = rendered_path(trajectory.position_m(1:index, :), trajectory.time_s(1:index), config.live);
+        set(pathHandle, 'XData', pathX / 1e6, 'YData', pathY / 1e6)
         set(spacecraftHandle, 'XData', trajectory.position_m(index, 1) / 1e6, 'YData', trajectory.position_m(index, 2) / 1e6)
     end
     info = sprintf('MISSION DATE\n%s\n\nElapsed: %.3f days\nVelocity: %.2f m/s\nEarth distance: %.2f km\nMoon distance: %.2f km\nCurrent delta-v: %.2f m/s\nPhase: %s\nView: %s', char(trajectory.epoch(index)), trajectory.time_s(index) / 86400, norm(trajectory.velocity_mps(index, :)), trajectory.earthDistance_m(index) / 1000, trajectory.moonDistance_m(index) / 1000, cumulative_delta_v(output.optimization.bestResult, trajectory.time_s(index), trajectory), char(trajectory.phase(index)), viewName);
@@ -75,6 +83,18 @@ for frameIndex = 1:numel(frameIndices)
         pause(min(0.08, max(0, (trajectory.time_s(index) - trajectory.time_s(index - 1)) / speedFactor)))
     end
 end
+end
+
+function [xData, yData] = rendered_path(positionData_m, timeData_s, liveConfig)
+if ~isfield(liveConfig, 'smoothPath') || ~liveConfig.smoothPath || size(positionData_m, 1) < 3
+    xData = positionData_m(:, 1);
+    yData = positionData_m(:, 2);
+    return
+end
+sampleCount = min(4000, max(size(positionData_m, 1), round(size(positionData_m, 1) * liveConfig.smoothSamplesPerPoint)));
+sampleTimes_s = linspace(timeData_s(1), timeData_s(end), sampleCount)';
+xData = interp1(timeData_s, positionData_m(:, 1), sampleTimes_s, 'pchip');
+yData = interp1(timeData_s, positionData_m(:, 2), sampleTimes_s, 'pchip');
 end
 
 function value = cumulative_delta_v(result, time_s, trajectory)

@@ -28,7 +28,7 @@ Replay the saved calculated trajectory:
 run_v2_live
 ```
 
-The live replay uses one fixed camera for the entire run. The default is fixed Earth-centered view; choose a fixed Moon-centered view explicitly with `run_v2_live([], [], 'moon')` after loading a result source, or pass `'earth'` for the default.
+The live replay uses one fixed camera for the entire run. The default is fixed Earth-centered view; choose a fixed Moon-centered view explicitly with `run_v2_live([], [], 'moon')` after loading a result source, or pass `'earth'` for the default. The displayed trail uses shape-preserving interpolation between numerical samples for a clean curve; the spacecraft marker and mission state remain on the original propagated samples.
 
 The V2 pipeline contains explicit mission epochs, hierarchical launch-date search, future Moon-state evaluation, universal-variable Lambert transfers, Earth/Moon/Sun numerical propagation, a one-day lunar approach transfer, near-Moon finite capture and departure burns, lunar two-body orbit propagation, burn and rocket-equation fuel accounting, constraint rejection, convergence history, persistent `results/mission_state.mat`, and dashboard artifacts.
 
