@@ -43,8 +43,10 @@ speedHandle = uicontrol('Parent', controlPanel, 'Style', 'slider', 'Min', 0.25, 
 setappdata(figureHandle, 'stopRequested', false)
 trialResults = struct([]);
 trajectoryOverview = struct([]);
-completedTrajectoryX = nan(0, 1);
-completedTrajectoryY = nan(0, 1);
+completedTrajectoryCapacity = (config.trajectoryOverviewPoints + 1) * config.trialCount;
+completedTrajectoryX = nan(completedTrajectoryCapacity, 1);
+completedTrajectoryY = nan(completedTrajectoryCapacity, 1);
+completedTrajectoryPointCount = 0;
 startedAt = datetime('now');
 stopped = false;
 for trialIndex = 1:config.trialCount
@@ -71,9 +73,18 @@ for trialIndex = 1:config.trialCount
         trajectoryOverview(trialIndex, 1) = trialTrajectory;
     end
     if isgraphics(figureHandle)
-        completedTrajectoryX = [completedTrajectoryX; currentX(1:currentPointCount); nan];
-        completedTrajectoryY = [completedTrajectoryY; currentY(1:currentPointCount); nan];
-        set(completedHandle, 'XData', completedTrajectoryX, 'YData', completedTrajectoryY)
+        if currentPointCount > 0
+            displayPointCount = min(config.trajectoryOverviewPoints, currentPointCount);
+            displayIndices = round(linspace(1, currentPointCount, displayPointCount));
+            writeStart = completedTrajectoryPointCount + 1;
+            writeEnd = writeStart + displayPointCount - 1;
+            completedTrajectoryX(writeStart:writeEnd) = currentX(displayIndices);
+            completedTrajectoryY(writeStart:writeEnd) = currentY(displayIndices);
+            completedTrajectoryPointCount = writeEnd + 1;
+            completedTrajectoryX(completedTrajectoryPointCount) = nan;
+            completedTrajectoryY(completedTrajectoryPointCount) = nan;
+            set(completedHandle, 'XData', completedTrajectoryX(1:completedTrajectoryPointCount), 'YData', completedTrajectoryY(1:completedTrajectoryPointCount))
+        end
         set(currentPathHandle, 'XData', nan, 'YData', nan)
         drawnow
     end

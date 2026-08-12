@@ -1,49 +1,52 @@
 Earth-Moon Orbital Rocket Monte Carlo Simulation
-Generated: 12-Aug-2026 17:26:57
+Generated: 12-Aug-2026 21:32:37
 
 Configuration
-Trials: 2
+Trials: 120
 Random seed: 120826
 Maximum simulation time: 8.000 days
 Moon orbital radius: 384400 km
 Moon SOI radius: 66169 km
 
 Mission outcomes
-Successful lunar orbits: 0 of 2 (0.00%)
-Moon encounters: 0
-Lunar captures: 0
-Lunar impacts: 0
-Earth escapes: 1
-Earth impacts: 1
+Successful lunar orbits: 3 of 120 (2.50%)
+Moon encounters: 47
+Lunar captures: 14
+Lunar impacts: 10
+Earth escapes: 120
+Earth impacts: 0
 
 Classification counts
-Lunar orbit                  0
-Temporary lunar capture      0
-Moon encounter               0
-Lunar impact                 0
-Earth impact                 1
-Earth escape                 1
+Lunar orbit                  3
+Temporary lunar capture      4
+Moon encounter               30
+Lunar impact                 10
+Earth impact                 0
+Earth escape                 73
 No lunar encounter           0
 Stopped                      0
 
 Best trajectory
-Trial: 1
-Classification: Earth escape
-Minimum Moon distance: 375468.971 km
-Minimum Moon-relative velocity: 1046.019 m/s
-Maximum altitude: 249237239.375 km
-Moon phase: 57.619 deg
-Target pitch: 81.332 deg
-Initial mass: 298439.156 kg
-Thrust: 10.566 MN
+Trial: 30
+Classification: Lunar orbit
+Minimum Moon distance: 2772.237 km
+Minimum Moon-relative velocity: 182.561 m/s
+Maximum altitude: 381034.492 km
+Moon phase: 87.363 deg
+Target pitch: 84.042 deg
+Translunar injection delta-v: 8011.322 m/s
+Lunar insertion delta-v: 11515.685 m/s
+Lunar insertion distance: 66091.045 km
+Initial mass: 292435.176 kg
+Thrust: 10.384 MN
 
 Metric statistics
 Metric                                     Mean          P05          P50          P95
-maximumAltitude_m                  124619392007.890 12463329377.526 124619392007.890 236775454638.254
-maximumVelocity_mps                  195231.859    44851.288   195231.859   345612.431
-maximumDynamicPressure_Pa          321894840.974 142652592.290 321894840.974 501137089.659
-minimumMoonDistance_m              376222173.061 375544290.990 376222173.061 376900055.132
-minimumMoonRelativeVelocity_mps        1038.343     1031.435     1038.343     1045.251
-flightTime_s                         346924.481    37076.514   346924.481   656772.448
-maximumCaptureDuration_s                  0.000        0.000        0.000        0.000
-finalMoonSpecificEnergy_Jkg        32824569748.283 3652176851.389 32824569748.283 61996962645.177
+maximumAltitude_m                  5054149952.923 375497957.166 7384348914.064 8309240219.143
+maximumVelocity_mps                   15974.653    15163.033    15875.991    16721.165
+maximumDynamicPressure_Pa             98549.577    68882.901    95249.345   137506.243
+minimumMoonDistance_m              96240800.956  1699577.786 76712945.383 222129455.895
+minimumMoonRelativeVelocity_mps         877.716      124.224     1040.741     1050.532
+flightTime_s                         650882.068   250689.411   691200.000   691200.000
+maximumCaptureDuration_s              24207.089        0.000        0.000   225618.000
+finalMoonSpecificEnergy_Jkg        46405701.468   -61996.268 66913633.669 82754792.800
