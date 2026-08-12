@@ -28,6 +28,8 @@ Replay the saved calculated trajectory:
 run_v2_live
 ```
 
+The live replay uses one fixed camera for the entire run. The default is fixed Earth-centered view; choose a fixed Moon-centered view explicitly with `run_v2_live([], [], 'moon')` after loading a result source, or pass `'earth'` for the default.
+
 The V2 pipeline contains explicit mission epochs, hierarchical launch-date search, future Moon-state evaluation, universal-variable Lambert transfers, Earth/Moon/Sun numerical propagation, a one-day lunar approach transfer, near-Moon finite capture and departure burns, lunar two-body orbit propagation, burn and rocket-equation fuel accounting, constraint rejection, convergence history, persistent `results/mission_state.mat`, and dashboard artifacts.
 
 The ephemeris adapter first attempts MATLAB Aerospace Toolbox `planetEphemeris` for Moon endpoint states. When that call is unavailable or unsupported, it reports and uses a documented analytical fallback based on mean lunar orbital elements. High-rate RK4 propagation uses the time-dependent analytical fallback to avoid repeatedly loading toolbox ephemeris data; this mode is explicitly recorded in trajectory diagnostics.

@@ -78,7 +78,7 @@ config.output.resultFile = 'v2_optimization_results.mat';
 config.output.reportFile = 'v2_mission_report.txt';
 config.output.dashboardFigure = 'v2_optimization_dashboard.png';
 config.output.trajectoryFigure = 'v2_best_trajectory.png';
-config.live = struct('frameStride', 4, 'pause_s', 0.01, 'speedFactor', 100000);
+config.live = struct('frameStride', 4, 'pause_s', 0.01, 'speedFactor', 100000, 'cameraMode', 'earth');
 if nargin > 0 && ~isempty(varargin{1})
     config = apply_overrides(config, varargin{1});
 end
