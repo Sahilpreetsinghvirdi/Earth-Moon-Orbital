@@ -3,7 +3,8 @@ candidate = normalize_candidate(candidate, config);
 result = blank_result(candidate, config);
 launchEpoch = candidate.launchEpoch;
 arrivalEpoch = launchEpoch + days(candidate.outboundFlightTime_days);
-departureEpoch = arrivalEpoch + days(candidate.lunarOrbitDuration_days);
+insertionEpoch = arrivalEpoch + days(candidate.lunarApproachDuration_days);
+departureEpoch = insertionEpoch + days(candidate.lunarOrbitDuration_days);
 returnEpoch = departureEpoch + days(candidate.returnFlightTime_days);
 if returnEpoch > config.searchEndEpoch + days(config.mission.maximumFlightTime_days)
     result.rejectReason = 'Mission exceeds configured search horizon';
@@ -57,7 +58,7 @@ totalDeltaV_mps = departureDeltaV_mps + insertionDeltaV_mps + departureDeltaVLun
 fuel = v2_calculate_fuel(totalDeltaV_mps, config.vehicle, config);
 orbitQuality = lunar_orbit_quality(candidate, periapsisRadius_m, outboundVInf_mps, config);
 returnSafety = max(0, 1 - arrivalSpeed_mps / config.mission.maximumEarthArrivalSpeed_mps);
-flightTime_days = candidate.outboundFlightTime_days + candidate.lunarOrbitDuration_days + candidate.returnFlightTime_days;
+flightTime_days = candidate.outboundFlightTime_days + candidate.lunarApproachDuration_days + candidate.lunarOrbitDuration_days + candidate.returnFlightTime_days;
 flightTimeQuality = max(0, 1 - flightTime_days / config.mission.maximumFlightTime_days);
 constraints = struct;
 constraints.outboundLambertValid = outbound.valid;
@@ -91,6 +92,7 @@ result = populate_result(result);
 
     function output = populate_result(output)
         output.arrivalEpoch = arrivalEpoch;
+        output.insertionEpoch = insertionEpoch;
         output.departureEpoch = departureEpoch;
         output.returnEpoch = returnEpoch;
         output.moonArrivalState = moonArrival;
@@ -132,6 +134,9 @@ if ~isfield(candidate, 'returnFlightTime_days')
 end
 if ~isfield(candidate, 'lunarOrbitDuration_days')
     candidate.lunarOrbitDuration_days = config.mission.lunarOrbitDuration_days;
+end
+if ~isfield(candidate, 'lunarApproachDuration_days')
+    candidate.lunarApproachDuration_days = config.mission.lunarApproachDuration_days;
 end
 if ~isfield(candidate, 'lunarOrbitAltitude_m')
     candidate.lunarOrbitAltitude_m = config.physics.moonParkingAltitude_m;

@@ -24,10 +24,17 @@ if isempty(optimization.bestResult)
     return
 end
 best = optimization.bestResult;
+if ~isfield(best.candidate, 'lunarApproachDuration_days')
+    best.candidate.lunarApproachDuration_days = config.mission.lunarApproachDuration_days;
+end
+if ~isfield(best, 'insertionEpoch')
+    best.insertionEpoch = best.arrivalEpoch + days(best.candidate.lunarApproachDuration_days);
+end
 fprintf(fileIdentifier, '\nBest mission\n');
 fprintf(fileIdentifier, 'Launch date: %s\n', char(best.candidate.launchEpoch));
 fprintf(fileIdentifier, 'Moon arrival: %s\n', char(best.arrivalEpoch));
-fprintf(fileIdentifier, 'Lunar orbit: %s for %.3f days\n', char(best.departureEpoch), best.candidate.lunarOrbitDuration_days);
+fprintf(fileIdentifier, 'Lunar approach: %s to %s for %.3f days\n', char(best.arrivalEpoch), char(best.insertionEpoch), best.candidate.lunarApproachDuration_days);
+fprintf(fileIdentifier, 'Lunar orbit: %s to %s for %.3f days\n', char(best.insertionEpoch), char(best.departureEpoch), best.candidate.lunarOrbitDuration_days);
 fprintf(fileIdentifier, 'Earth return: %s\n', char(best.returnEpoch));
 fprintf(fileIdentifier, 'Mission score: %.8f\n', best.score);
 fprintf(fileIdentifier, 'Total delta-v: %.3f m/s\n', best.totalDeltaV_mps);
@@ -46,9 +53,12 @@ fprintf(fileIdentifier, 'Trajectory completed: %d\n', trajectory.completed);
 fprintf(fileIdentifier, 'Trajectory collision: %d\n', trajectory.collision);
 fprintf(fileIdentifier, 'Lunar SOI entered: %d\n', trajectory.lunarSOIEntered);
 fprintf(fileIdentifier, 'Minimum lunar distance: %.3f km\n', trajectory.lunarEncounterDistance_m / 1000);
+fprintf(fileIdentifier, 'Lunar orbit minimum distance: %.3f km\n', trajectory.lunarOrbitMinimumDistance_m / 1000);
+fprintf(fileIdentifier, 'Lunar orbit propagated periapsis altitude: %.3f km\n', trajectory.lunarOrbitPeriapsisAltitude_m / 1000);
+fprintf(fileIdentifier, 'Lunar orbit bound and valid: %d, %d\n', trajectory.lunarOrbitBound, trajectory.lunarOrbitValid);
 fprintf(fileIdentifier, 'Earth arrival distance: %.3f km\n', trajectory.earthArrivalDistance_m / 1000);
 fprintf(fileIdentifier, 'Earth arrival safe within SOI: %d\n', trajectory.earthArrivalSafe);
-fprintf(fileIdentifier, 'Phase-boundary position jumps: %.3f km, %.3f km\n', trajectory.phaseBoundaryJumps_m(1) / 1000, trajectory.phaseBoundaryJumps_m(2) / 1000);
+fprintf(fileIdentifier, 'Phase-boundary position jumps: %.3f km, %.3f km, %.3f km\n', trajectory.phaseBoundaryJumps_m(1) / 1000, trajectory.phaseBoundaryJumps_m(2) / 1000, trajectory.phaseBoundaryJumps_m(3) / 1000);
 fprintf(fileIdentifier, 'Capture burn duration: %.1f s\n', config.mission.captureBurnDuration_s);
 fprintf(fileIdentifier, 'Departure burn duration: %.1f s\n', config.mission.departureBurnDuration_s);
 end

@@ -28,7 +28,7 @@ Replay the saved calculated trajectory:
 run_v2_live
 ```
 
-The V2 pipeline contains explicit mission epochs, hierarchical launch-date search, future Moon-state evaluation, universal-variable Lambert transfers, Earth/Moon/Sun numerical propagation, lunar two-body orbit propagation, burn and rocket-equation fuel accounting, constraint rejection, convergence history, persistent `results/mission_state.mat`, and dashboard artifacts.
+The V2 pipeline contains explicit mission epochs, hierarchical launch-date search, future Moon-state evaluation, universal-variable Lambert transfers, Earth/Moon/Sun numerical propagation, a one-day lunar approach transfer, near-Moon finite capture and departure burns, lunar two-body orbit propagation, burn and rocket-equation fuel accounting, constraint rejection, convergence history, persistent `results/mission_state.mat`, and dashboard artifacts.
 
 The ephemeris adapter first attempts MATLAB Aerospace Toolbox `planetEphemeris` for Moon endpoint states. When that call is unavailable or unsupported, it reports and uses a documented analytical fallback based on mean lunar orbital elements. High-rate RK4 propagation uses the time-dependent analytical fallback to avoid repeatedly loading toolbox ephemeris data; this mode is explicitly recorded in trajectory diagnostics.
 
@@ -36,7 +36,7 @@ The optimizer evaluates coarse dates, refines around the current best launch win
 
 Lambert candidates are rejected when the spacecraft is moving in the wrong radial direction at lunar arrival or departure. The trajectory builder also reports Earth-arrival safety, lunar sphere-of-influence entry, and phase-boundary position jumps. The current mission model uses patched-conic Lambert handoffs with numerical Earth-Moon-Sun propagation inside each transfer and a numerical lunar two-body segment; reported phase-boundary jumps are an explicit limitation rather than hidden continuous dynamics.
 
-Lunar capture and departure are modeled as finite-duration guided burns, not instantaneous position replacements. The burn durations are configurable in `v2_config.m` and default to 1,800 seconds each. The spacecraft state remains continuous through both burns; the report records the boundary jumps and the lunar specific-energy history.
+Lunar approach, capture, and departure are modeled as finite-duration guided burns and numerical Moon-relative propagation, not instantaneous position replacements. The approach transfers the spacecraft from the actual outbound endpoint to a near-lunar periapsis; the propagated orbit uses a 300 km safety periapsis floor. The burn durations are configurable in `v2_config.m` and default to 1,800 seconds each. The spacecraft state remains continuous through all phase boundaries; the report records the boundary jumps and the lunar specific-energy history.
 
 Run focused validation:
 

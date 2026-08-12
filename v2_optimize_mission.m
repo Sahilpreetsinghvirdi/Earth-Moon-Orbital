@@ -16,6 +16,9 @@ optimization.stopReason = 'Not started';
 optimization.usedParallel = false;
 if nargin >= 2 && ~isempty(previousState) && isfield(previousState, 'bestResult') && ~isempty(previousState.bestResult)
     optimization.bestResult = previousState.bestResult;
+    if ~isfield(optimization.bestResult.candidate, 'lunarApproachDuration_days')
+        optimization.bestResult.candidate.lunarApproachDuration_days = config.mission.lunarApproachDuration_days;
+    end
 end
 phaseDefinitions = build_phase_definitions(config);
 for phaseIndex = 1:numel(phaseDefinitions)
@@ -101,7 +104,7 @@ if strcmp(phase.name, 'coarse')
 end
 count = numel(dates) * numel(outboundTimes) * numel(returnTimes) * numel(orbitAltitudes_m);
 phaseCapacity = max(1, floor(config.mission.maxCandidates / 3));
-candidates = repmat(struct('launchEpoch', dates(1), 'outboundFlightTime_days', 0, 'returnFlightTime_days', 0, 'lunarOrbitDuration_days', orbitDuration_days, 'lunarOrbitAltitude_m', 0), min(count, phaseCapacity), 1);
+candidates = repmat(struct('launchEpoch', dates(1), 'outboundFlightTime_days', 0, 'returnFlightTime_days', 0, 'lunarApproachDuration_days', config.mission.lunarApproachDuration_days, 'lunarOrbitDuration_days', orbitDuration_days, 'lunarOrbitAltitude_m', 0), min(count, phaseCapacity), 1);
 dateCapacity = max(1, floor(numel(candidates) / max(numel(outboundTimes) * numel(returnTimes) * numel(orbitAltitudes_m), 1)));
 dateIndices = unique(round(linspace(1, numel(dates), min(numel(dates), dateCapacity))));
 writeIndex = 0;
@@ -116,6 +119,7 @@ for dateIndex = dateIndices
                 candidates(writeIndex).launchEpoch = dates(dateIndex);
                 candidates(writeIndex).outboundFlightTime_days = outboundTimes(outboundIndex);
                 candidates(writeIndex).returnFlightTime_days = returnTimes(returnIndex);
+                candidates(writeIndex).lunarApproachDuration_days = config.mission.lunarApproachDuration_days;
                 candidates(writeIndex).lunarOrbitDuration_days = orbitDuration_days;
                 candidates(writeIndex).lunarOrbitAltitude_m = orbitAltitudes_m(altitudeIndex);
             end

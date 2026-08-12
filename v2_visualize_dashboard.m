@@ -38,7 +38,13 @@ colorbar(axesHandle)
 axesHandle = subplot(2, 2, 4, 'Parent', figureHandle);
 axis(axesHandle, 'off')
 best = optimization.bestResult;
-summary = sprintf('V2 OPTIMIZATION SUMMARY\n\nLaunch Date:       %s\nMoon Encounter:    %s\nLunar Orbit:       %s\nEarth Return:      %s\n\nTotal delta-v:     %.2f m/s\nEstimated fuel:    %.2f kg\nMission score:     %.6f\n\nCandidates tested: %d\nSuccessful:        %d\nIterations:        %d\nStop reason:       %s', char(best.candidate.launchEpoch), char(best.arrivalEpoch), char(best.departureEpoch), char(best.returnEpoch), best.totalDeltaV_mps, best.fuel.requiredPropellant_kg, best.score, optimization.candidatesTested, optimization.successfulCandidates, optimization.iterations, optimization.stopReason);
+if ~isfield(best.candidate, 'lunarApproachDuration_days')
+    best.candidate.lunarApproachDuration_days = config.mission.lunarApproachDuration_days;
+end
+if ~isfield(best, 'insertionEpoch')
+    best.insertionEpoch = best.arrivalEpoch + days(best.candidate.lunarApproachDuration_days);
+end
+summary = sprintf('V2 OPTIMIZATION SUMMARY\n\nLaunch Date:       %s\nMoon Encounter:    %s\nLunar Orbit:       %s\nEarth Return:      %s\n\nTotal delta-v:     %.2f m/s\nEstimated fuel:    %.2f kg\nMission score:     %.6f\n\nLunar orbit valid: %d\nCandidates tested: %d\nSuccessful:        %d\nIterations:        %d\nStop reason:       %s', char(best.candidate.launchEpoch), char(best.arrivalEpoch), char(best.insertionEpoch), char(best.returnEpoch), best.totalDeltaV_mps, best.fuel.requiredPropellant_kg, best.score, trajectory.lunarOrbitValid, optimization.candidatesTested, optimization.successfulCandidates, optimization.iterations, optimization.stopReason);
 text(axesHandle, 0.02, 0.96, summary, 'Units', 'normalized', 'VerticalAlignment', 'top', 'FontName', 'Consolas', 'FontSize', 10)
 dashboardPath = fullfile(outputDirectory, config.output.dashboardFigure);
 saveas(figureHandle, dashboardPath)

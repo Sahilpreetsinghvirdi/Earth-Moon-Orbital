@@ -47,7 +47,11 @@ else
     relativeVelocity = initialState.velocity_mps(:) - moonStart.velocity_mps;
 end
 captureInitialVelocity = relativeVelocity;
-captureTargetVelocity = captured_orbit_velocity(relativePosition, relativeVelocity, altitude_m, config);
+capturePredictedPosition = relativePosition;
+for iteration = 1:6
+    captureTargetVelocity = captured_orbit_velocity(capturePredictedPosition, relativeVelocity, altitude_m, config);
+    capturePredictedPosition = relativePosition + 0.5 * (relativeVelocity + captureTargetVelocity) * captureBurnDuration_s;
+end
 departureInitialVelocity = nan(3, 1);
 departureTargetRelativeVelocity = nan(3, 1);
 departureDirection = nan(3, 1);
@@ -150,7 +154,8 @@ end
 
 function velocity = captured_orbit_velocity(position, incomingVelocity, altitude_m, config)
 radius = norm(position);
-periapsisRadius = config.physics.moonRadius_m + altitude_m;
+periapsisAltitude_m = max(altitude_m, config.mission.trajectoryLunarPeriapsisAltitude_m);
+periapsisRadius = config.physics.moonRadius_m + periapsisAltitude_m;
 radial = position / max(radius, 1);
 angularMomentum = cross(position, incomingVelocity);
 if norm(angularMomentum) < eps
