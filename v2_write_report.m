@@ -49,4 +49,6 @@ fprintf(fileIdentifier, 'Minimum lunar distance: %.3f km\n', trajectory.lunarEnc
 fprintf(fileIdentifier, 'Earth arrival distance: %.3f km\n', trajectory.earthArrivalDistance_m / 1000);
 fprintf(fileIdentifier, 'Earth arrival safe within SOI: %d\n', trajectory.earthArrivalSafe);
 fprintf(fileIdentifier, 'Phase-boundary position jumps: %.3f km, %.3f km\n', trajectory.phaseBoundaryJumps_m(1) / 1000, trajectory.phaseBoundaryJumps_m(2) / 1000);
+fprintf(fileIdentifier, 'Capture burn duration: %.1f s\n', config.mission.captureBurnDuration_s);
+fprintf(fileIdentifier, 'Departure burn duration: %.1f s\n', config.mission.departureBurnDuration_s);
 end

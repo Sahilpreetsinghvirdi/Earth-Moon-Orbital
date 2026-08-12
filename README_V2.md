@@ -36,6 +36,8 @@ The optimizer evaluates coarse dates, refines around the current best launch win
 
 Lambert candidates are rejected when the spacecraft is moving in the wrong radial direction at lunar arrival or departure. The trajectory builder also reports Earth-arrival safety, lunar sphere-of-influence entry, and phase-boundary position jumps. The current mission model uses patched-conic Lambert handoffs with numerical Earth-Moon-Sun propagation inside each transfer and a numerical lunar two-body segment; reported phase-boundary jumps are an explicit limitation rather than hidden continuous dynamics.
 
+Lunar capture and departure are modeled as finite-duration guided burns, not instantaneous position replacements. The burn durations are configurable in `v2_config.m` and default to 1,800 seconds each. The spacecraft state remains continuous through both burns; the report records the boundary jumps and the lunar specific-energy history.
+
 Run focused validation:
 
 ```matlab

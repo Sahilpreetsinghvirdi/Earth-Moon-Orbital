@@ -36,6 +36,9 @@ assert(trajectory.completed)
 assert(~trajectory.collision)
 assert(trajectory.lunarSOIEntered)
 assert(trajectory.earthArrivalSafe)
+assert(max(trajectory.phaseBoundaryJumps_m) < 1)
+assert(any(strcmp(trajectory.phase, 'Lunar capture burn')))
+assert(any(strcmp(trajectory.phase, 'Lunar departure burn')))
 statePath = v2_save_mission_state(config, optimization, trajectory);
 assert(exist(statePath, 'file') == 2)
 [loadedState, ~] = v2_load_mission_state(config);

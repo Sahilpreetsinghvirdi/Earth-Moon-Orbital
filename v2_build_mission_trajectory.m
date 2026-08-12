@@ -10,11 +10,9 @@ if isempty(result) || ~result.valid
 end
 launchState = struct('position_m', result.earthParkingPosition_m, 'velocity_mps', result.outboundLambert.velocity1_mps);
 outbound = v2_propagate_trajectory(config, result.candidate.launchEpoch, launchState, result.candidate.outboundFlightTime_days * 86400, 'Earth departure and lunar transfer', callback, stopFunction);
-orbit = v2_propagate_lunar_orbit(config, result.arrivalEpoch, result.candidate.lunarOrbitDuration_days * 86400, result.candidate.lunarOrbitAltitude_m, callback, stopFunction);
-moonDeparture = result.moonDepartureState;
-radialDirection = -moonDeparture.position_m / norm(moonDeparture.position_m);
-returnPosition_m = moonDeparture.position_m + radialDirection * config.physics.moonSOI_m;
-returnState = struct('position_m', returnPosition_m, 'velocity_mps', result.returnLambert.velocity1_mps);
+outboundFinalState = struct('position_m', outbound.position_m(end, :)', 'velocity_mps', outbound.velocity_mps(end, :)');
+orbit = v2_propagate_lunar_orbit(config, result.arrivalEpoch, result.candidate.lunarOrbitDuration_days * 86400, result.candidate.lunarOrbitAltitude_m, callback, stopFunction, outboundFinalState, result.returnLambert.velocity1_mps, result.moonDepartureState.velocity_mps);
+returnState = struct('position_m', orbit.position_m(end, :)', 'velocity_mps', orbit.velocity_mps(end, :)');
 returnSegment = v2_propagate_trajectory(config, result.departureEpoch, returnState, result.candidate.returnFlightTime_days * 86400, 'Lunar departure and Earth return', callback, stopFunction);
 outbound = normalize_segment(outbound, 'Earth departure and lunar transfer');
 orbit = normalize_segment(orbit, 'Lunar orbit');
@@ -53,7 +51,9 @@ end
 if ~isfield(segment, 'moonDistance_m')
     segment.moonDistance_m = vecnorm(segment.position_m - segment.moonPosition_m, 2, 2);
 end
-segment.phase = repmat(string(phaseName), count, 1);
+if ~isfield(segment, 'phase') || numel(segment.phase) ~= count
+    segment.phase = repmat(string(phaseName), count, 1);
+end
 end
 
 function output = concatenate_segments(varargin)
@@ -65,6 +65,9 @@ for fieldIndex = 1:numel(fieldNames)
     values = cell(1, numel(segments));
     for segmentIndex = 1:numel(segments)
         values{segmentIndex} = segments{segmentIndex}.(fieldName);
+        if segmentIndex > 1 && ~isempty(values{segmentIndex})
+            values{segmentIndex} = values{segmentIndex}(2:end, :);
+        end
     end
     if strcmp(fieldName, 'time_s')
         offset = 0;
