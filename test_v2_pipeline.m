@@ -41,7 +41,13 @@ assert(max(trajectory.phaseBoundaryJumps_m) < 1)
 assert(any(strcmp(trajectory.phase, 'Lunar capture burn')))
 assert(any(strcmp(trajectory.phase, 'Lunar departure burn')))
 assert(trajectory.lunarOrbitValid)
-assert(trajectory.lunarOrbitMinimumDistance_m < 10e6)
+assert(trajectory.lunarOrbitMinimumDistance_m < config.physics.moonRadius_m + 5e5)
+orbitMask = strcmp(trajectory.phase, 'Lunar orbit');
+assert(max(trajectory.moonDistance_m(orbitMask)) - min(trajectory.moonDistance_m(orbitMask)) < 2e4)
+departureIndex = find(strcmp(trajectory.phase, 'Lunar departure burn'), 1, 'first');
+departurePosition_m = trajectory.position_m(departureIndex, :)' - trajectory.moonPosition_m(departureIndex, :)';
+departureVelocity_mps = trajectory.velocity_mps(departureIndex, :)' - v2_get_celestial_state(trajectory.epoch(departureIndex), 'moon', config, 'analytical').velocity_mps;
+assert(abs(dot(departurePosition_m, departureVelocity_mps)) / norm(departurePosition_m) < 100)
 assert(any(strcmp(trajectory.phase, 'Earth departure and lunar transfer burn')))
 assert(abs(norm(trajectory.velocity_mps(1, :)) - norm(candidateResult.earthParkingVelocity_mps)) < 1e-6)
 outboundMask = startsWith(trajectory.phase, "Earth departure") | startsWith(trajectory.phase, "Lunar approach");

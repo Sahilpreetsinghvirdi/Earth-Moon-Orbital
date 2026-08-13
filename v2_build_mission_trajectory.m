@@ -42,7 +42,9 @@ returnSegment = v2_propagate_trajectory(config, actualDepartureEpoch, returnStat
 terminalStart = struct('position_m', returnSegment.position_m(end, :)', 'velocity_mps', returnSegment.velocity_mps(end, :)');
 terminalLambert = v2_solve_lambert(terminalStart.position_m, actualReturnTargetPosition_m, terminalDuration_s, config.physics.muEarth_m3ps2, true);
 if terminalLambert.valid
-    terminalSegment = v2_propagate_trajectory(config, returnSegment.epoch(end), terminalStart, terminalDuration_s, 'Earth terminal approach and capture', callback, stopFunction, terminalLambert.velocity1_mps, config.mission.earthTerminalBurnDuration_s);
+    terminalBurnDuration_s = min(config.mission.earthTerminalBurnDuration_s, terminalDuration_s / 4);
+    terminalBurnDeltaV_mps = retarget_earth_terminal(config, returnSegment.epoch(end), terminalStart, terminalDuration_s, terminalBurnDuration_s, actualReturnTargetPosition_m, terminalLambert.velocity1_mps - terminalStart.velocity_mps);
+    terminalSegment = v2_propagate_trajectory(config, returnSegment.epoch(end), terminalStart, terminalDuration_s, 'Earth terminal approach and capture', callback, stopFunction, terminalBurnDeltaV_mps, terminalBurnDuration_s, "delta-v");
     returnSegment = concatenate_segments(normalize_segment(returnSegment, 'Lunar departure and Earth return'), normalize_segment(terminalSegment, 'Earth terminal approach and capture'));
 end
 outbound = normalize_segment(outbound, 'Earth departure and lunar transfer');
@@ -75,6 +77,27 @@ if outboundCount > 0 && approachCount > 0 && orbitCount > 0 && returnStartIndex 
     trajectory.phaseBoundaryJumps_m = [norm(approach.position_m(1, :) - outbound.position_m(end, :)), norm(orbit.position_m(1, :) - approach.position_m(end, :)), norm(returnSegment.position_m(1, :) - orbit.position_m(end, :))];
 else
     trajectory.phaseBoundaryJumps_m = [nan, nan, nan];
+end
+
+function burnDeltaV_mps = retarget_earth_terminal(config, startEpoch, initialState, duration_s, burnDuration_s, targetPosition_m, burnDeltaV_mps)
+if burnDuration_s <= 0 || duration_s <= burnDuration_s
+    return
+end
+for iteration = 1:5
+    burn = v2_propagate_trajectory(config, startEpoch, initialState, burnDuration_s, 'Earth terminal approach and capture', [], @() false, burnDeltaV_mps, burnDuration_s, "delta-v");
+    if isempty(burn.position_m)
+        return
+    end
+    transfer = v2_solve_lambert(burn.position_m(end, :)', targetPosition_m, duration_s - burnDuration_s, config.physics.muEarth_m3ps2, true);
+    if ~transfer.valid
+        return
+    end
+    correction_mps = transfer.velocity1_mps - burn.velocity_mps(end, :)';
+    burnDeltaV_mps = burnDeltaV_mps + correction_mps;
+    if norm(correction_mps) < 0.01
+        break
+    end
+end
 end
 
 function burnDeltaV_mps = retarget_earth_departure(result, config, launchState, outboundDuration_s, burnDuration_s)

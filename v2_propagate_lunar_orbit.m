@@ -14,7 +14,7 @@ end
 if nargin < 9
     departureMoonVelocity_mps = [];
 end
-step_s = config.integrator.highFidelityStep_s;
+step_s = orbit_lunar_step(config);
 captureBurnDuration_s = min(config.mission.captureBurnDuration_s, duration_s / 3);
 departureBurnDuration_s = min(config.mission.departureBurnDuration_s, duration_s / 3);
 if captureBurnDuration_s + departureBurnDuration_s > duration_s
@@ -39,34 +39,34 @@ valid = false(stepCount, 1);
 moonStart = v2_get_celestial_state(startEpoch, 'moon', config, 'analytical');
 if isempty(initialState)
     radial = -moonStart.position_m / norm(moonStart.position_m);
-    normal = [0; 0; 1];
-    tangential = cross(normal, radial);
+    orbitNormal = [0; 0; 1];
+    tangential = cross(orbitNormal, radial);
     tangential = tangential / norm(tangential);
     relativePosition = radial * (config.physics.moonRadius_m + altitude_m);
     relativeVelocity = tangential * sqrt(config.physics.muMoon_m3ps2 / norm(relativePosition));
 else
     relativePosition = initialState.position_m(:) - moonStart.position_m;
     relativeVelocity = initialState.velocity_mps(:) - moonStart.velocity_mps;
+    orbitNormal = cross(relativePosition, relativeVelocity);
+    if norm(orbitNormal) < eps
+        orbitNormal = [0; 0; 1];
+    else
+        orbitNormal = orbitNormal / norm(orbitNormal);
+    end
 end
-captureInitialVelocity = relativeVelocity;
-capturePredictedPosition = relativePosition;
+captureDeltaV_mps = capture_orbit_velocity(relativePosition, relativeVelocity, orbitNormal, config) - relativeVelocity;
 for iteration = 1:6
-    captureTargetVelocity = captured_orbit_velocity(capturePredictedPosition, relativeVelocity, altitude_m, config);
-    capturePredictedPosition = relativePosition + 0.5 * (relativeVelocity + captureTargetVelocity) * captureBurnDuration_s;
+    [capturePosition, captureVelocity] = propagate_finite_burn(relativePosition, relativeVelocity, captureDeltaV_mps, captureBurnDuration_s, step_s, config);
+    captureTargetVelocity = capture_orbit_velocity(capturePosition, captureVelocity, orbitNormal, config);
+    correction_mps = captureTargetVelocity - captureVelocity;
+    captureDeltaV_mps = captureDeltaV_mps + correction_mps;
+    if norm(correction_mps) < 0.02
+        break
+    end
 end
 departureInitialVelocity = nan(3, 1);
-departureTargetRelativeVelocity = nan(3, 1);
-departureDirection = nan(3, 1);
-if ~isempty(departureTargetVelocity_mps)
-    targetRelativeDirection = departureTargetVelocity_mps(:) - departureMoonVelocity_mps(:);
-    if norm(targetRelativeDirection) > 0
-        targetRelativeDirection = targetRelativeDirection / norm(targetRelativeDirection);
-    else
-        targetRelativeDirection = [];
-    end
-else
-    targetRelativeDirection = [];
-end
+departureDeltaV_mps = nan(3, 1);
+departureTargetRelativeVelocity_mps = nan(3, 1);
 writeIndex = 0;
 currentTime_s = 0;
 while currentTime_s <= maximumDuration_s + 1e-6 && writeIndex < stepCount
@@ -78,17 +78,17 @@ while currentTime_s <= maximumDuration_s + 1e-6 && writeIndex < stepCount
     if isnan(departureBurnStart_s) && currentTime_s >= nominalDuration_s
         earthDirection = -moon.position_m / norm(moon.position_m);
         radialDirection = relativePosition / max(norm(relativePosition), 1);
-        if dot(earthDirection, radialDirection) > 0 || currentTime_s >= maximumDuration_s - departureBurnDuration_s
+        if dot(earthDirection, radialDirection) > cosd(20) || currentTime_s >= maximumDuration_s - departureBurnDuration_s
             departureBurnStart_s = currentTime_s;
         end
     end
-    currentAcceleration = relative_acceleration(currentTime_s, relativePosition, relativeVelocity, currentEpoch, moon);
+    currentAcceleration = relative_acceleration(currentTime_s, relativePosition, relativeVelocity, moon.velocity_mps);
     writeIndex = writeIndex + 1;
     time_s(writeIndex) = currentTime_s;
     epoch(writeIndex) = currentEpoch;
     position_m(writeIndex, :) = (moon.position_m + relativePosition)';
     velocity_mps(writeIndex, :) = (moon.velocity_mps + relativeVelocity)';
-    acceleration_mps2(writeIndex, :) = (currentAcceleration)';
+    acceleration_mps2(writeIndex, :) = currentAcceleration';
     moonPosition_m(writeIndex, :) = moon.position_m';
     moonDistance_m(writeIndex) = norm(relativePosition);
     earthDistance_m(writeIndex) = norm(moon.position_m + relativePosition);
@@ -110,11 +110,11 @@ while currentTime_s <= maximumDuration_s + 1e-6 && writeIndex < stepCount
     if dt_s <= 0
         break
     end
-    [relativePosition, relativeVelocity] = rk4_step(currentTime_s, relativePosition, relativeVelocity, currentEpoch, dt_s);
+    [relativePosition, relativeVelocity] = rk4_step(currentTime_s, relativePosition, relativeVelocity, moon.velocity_mps, dt_s);
     currentTime_s = currentTime_s + dt_s;
 end
 completed = writeIndex > 0 && ~isnan(departureBurnStart_s) && time_s(writeIndex) >= departureBurnStart_s + departureBurnDuration_s - 1e-6;
-trajectory = struct('time_s', time_s(1:writeIndex), 'epoch', epoch(1:writeIndex), 'position_m', position_m(1:writeIndex, :), 'velocity_mps', velocity_mps(1:writeIndex, :), 'acceleration_mps2', acceleration_mps2(1:writeIndex, :), 'moonPosition_m', moonPosition_m(1:writeIndex, :), 'moonDistance_m', moonDistance_m(1:writeIndex), 'earthDistance_m', earthDistance_m(1:writeIndex), 'specificEnergyEarth_Jkg', specificEnergyEarth_Jkg(1:writeIndex), 'specificEnergyMoon_Jkg', specificEnergyMoon_Jkg(1:writeIndex), 'phase', phase(1:writeIndex), 'valid', valid(1:writeIndex), 'completed', completed, 'collision', any(moonDistance_m(1:writeIndex) <= config.physics.moonRadius_m), 'nominalDuration_s', nominalDuration_s, 'departureBurnStart_s', departureBurnStart_s, 'actualDuration_s', time_s(max(writeIndex, 1)));
+trajectory = struct('time_s', time_s(1:writeIndex), 'epoch', epoch(1:writeIndex), 'position_m', position_m(1:writeIndex, :), 'velocity_mps', velocity_mps(1:writeIndex, :), 'acceleration_mps2', acceleration_mps2(1:writeIndex, :), 'moonPosition_m', moonPosition_m(1:writeIndex, :), 'moonDistance_m', moonDistance_m(1:writeIndex), 'earthDistance_m', earthDistance_m(1:writeIndex), 'specificEnergyEarth_Jkg', specificEnergyEarth_Jkg(1:writeIndex), 'specificEnergyMoon_Jkg', specificEnergyMoon_Jkg(1:writeIndex), 'phase', phase(1:writeIndex), 'valid', valid(1:writeIndex), 'completed', completed, 'collision', any(moonDistance_m(1:writeIndex) <= config.physics.moonRadius_m), 'nominalDuration_s', nominalDuration_s, 'departureBurnStart_s', departureBurnStart_s, 'actualDuration_s', time_s(max(writeIndex, 1)), 'captureDeltaV_mps', captureDeltaV_mps, 'departureTargetRelativeVelocity_mps', departureTargetRelativeVelocity_mps);
 
     function value = phase_name(timeValue_s)
         if timeValue_s < captureBurnDuration_s
@@ -128,65 +128,94 @@ trajectory = struct('time_s', time_s(1:writeIndex), 'epoch', epoch(1:writeIndex)
         end
     end
 
-    function acceleration = relative_acceleration(timeValue_s, currentPosition, currentVelocity, currentEpoch, moon)
-        gravity = -config.physics.muMoon_m3ps2 * currentPosition / max(norm(currentPosition), 1) ^ 3;
-        thrust = zeros(3, 1);
+    function acceleration = relative_acceleration(timeValue_s, currentPosition, currentVelocity, currentMoonVelocity_mps)
+        gravity = moon_gravity(currentPosition, config);
         if timeValue_s < captureBurnDuration_s && captureBurnDuration_s > 0
-            thrust = smooth_velocity_derivative(captureInitialVelocity, captureTargetVelocity, timeValue_s, captureBurnDuration_s) - gravity;
-        elseif ~isnan(departureBurnStart_s) && timeValue_s >= departureBurnStart_s && departureBurnDuration_s > 0
+            acceleration = gravity + burn_profile(timeValue_s, captureBurnDuration_s) * captureDeltaV_mps;
+            return
+        end
+        if ~isnan(departureBurnStart_s) && timeValue_s >= departureBurnStart_s && departureBurnDuration_s > 0
             if any(isnan(departureInitialVelocity))
                 departureInitialVelocity = currentVelocity;
-                departureTargetRelativeVelocity = departureTargetVelocity_mps(:) - moon.velocity_mps;
-                if isempty(departureDirection) || dot(departureTargetRelativeVelocity, currentPosition) <= 0
-                    departureDirection = currentPosition / norm(currentPosition);
-                    departureSpeed = norm(departureTargetRelativeVelocity);
-                    departureTargetRelativeVelocity = departureDirection * max(departureSpeed, sqrt(2 * config.physics.muMoon_m3ps2 / max(norm(currentPosition), 1)));
+                radialDirection = currentPosition / max(norm(currentPosition), 1);
+                tangentialDirection = cross(orbitNormal, radialDirection);
+                tangentialDirection = tangentialDirection / max(norm(tangentialDirection), 1);
+                if dot(tangentialDirection, currentVelocity) < 0
+                    tangentialDirection = -tangentialDirection;
                 end
+                if isempty(departureTargetVelocity_mps)
+                    requestedRelativeVelocity_mps = currentVelocity;
+                else
+                    requestedRelativeVelocity_mps = departureTargetVelocity_mps(:) - currentMoonVelocity_mps;
+                end
+                if norm(requestedRelativeVelocity_mps) < eps
+                    requestedDirection = tangentialDirection;
+                else
+                    requestedDirection = requestedRelativeVelocity_mps / norm(requestedRelativeVelocity_mps);
+                end
+                minimumEscapeSpeed_mps = sqrt(2 * config.physics.muMoon_m3ps2 / max(norm(currentPosition), 1)) * 1.06;
+                departureTargetRelativeVelocity_mps = requestedDirection * max(norm(requestedRelativeVelocity_mps), minimumEscapeSpeed_mps);
+                departureDeltaV_mps = departureTargetRelativeVelocity_mps - departureInitialVelocity;
             end
-            thrust = smooth_velocity_derivative(departureInitialVelocity, departureTargetRelativeVelocity, timeValue_s - departureBurnStart_s, departureBurnDuration_s) - gravity;
+            acceleration = gravity + burn_profile(timeValue_s - departureBurnStart_s, departureBurnDuration_s) * departureDeltaV_mps;
+            return
         end
-        acceleration = gravity + thrust;
+        acceleration = gravity;
     end
 
-    function derivative = smooth_velocity_derivative(initialVelocity, finalVelocity, elapsed_s, burnDuration_s)
-        normalizedTime = min(1, max(0, elapsed_s / max(burnDuration_s, eps)));
-        derivative = (6 * normalizedTime - 6 * normalizedTime ^ 2) * (finalVelocity - initialVelocity) / max(burnDuration_s, eps);
-    end
-
-    function [nextPosition, nextVelocity] = rk4_step(timeValue_s, currentPosition, currentVelocity, currentEpoch, dt)
-        moon1 = v2_get_celestial_state(currentEpoch, 'moon', config, 'analytical');
-        k1 = relative_acceleration(timeValue_s, currentPosition, currentVelocity, currentEpoch, moon1);
-        moon2 = v2_get_celestial_state(currentEpoch + seconds(dt / 2), 'moon', config, 'analytical');
-        k2 = relative_acceleration(timeValue_s + dt / 2, currentPosition + currentVelocity * dt / 2, currentVelocity + k1 * dt / 2, currentEpoch + seconds(dt / 2), moon2);
-        k3 = relative_acceleration(timeValue_s + dt / 2, currentPosition + (currentVelocity + k1 * dt / 2) * dt / 2, currentVelocity + k2 * dt / 2, currentEpoch + seconds(dt / 2), moon2);
-        moon4 = v2_get_celestial_state(currentEpoch + seconds(dt), 'moon', config, 'analytical');
-        k4 = relative_acceleration(timeValue_s + dt, currentPosition + (currentVelocity + k2 * dt / 2) * dt, currentVelocity + k3 * dt, currentEpoch + seconds(dt), moon4);
-        nextPosition = currentPosition + dt / 6 * (currentVelocity + 2 * (currentVelocity + k1 * dt / 2) + 2 * (currentVelocity + k2 * dt / 2) + (currentVelocity + k3 * dt));
-        nextVelocity = currentVelocity + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4);
+    function [nextPosition, nextVelocity] = rk4_step(timeValue_s, currentPosition, currentVelocity, currentMoonVelocity_mps, dt_s)
+        k1 = relative_acceleration(timeValue_s, currentPosition, currentVelocity, currentMoonVelocity_mps);
+        k2 = relative_acceleration(timeValue_s + dt_s / 2, currentPosition + currentVelocity * dt_s / 2, currentVelocity + k1 * dt_s / 2, currentMoonVelocity_mps);
+        k3 = relative_acceleration(timeValue_s + dt_s / 2, currentPosition + (currentVelocity + k1 * dt_s / 2) * dt_s / 2, currentVelocity + k2 * dt_s / 2, currentMoonVelocity_mps);
+        k4 = relative_acceleration(timeValue_s + dt_s, currentPosition + (currentVelocity + k2 * dt_s / 2) * dt_s, currentVelocity + k3 * dt_s, currentMoonVelocity_mps);
+        nextPosition = currentPosition + dt_s / 6 * (currentVelocity + 2 * (currentVelocity + k1 * dt_s / 2) + 2 * (currentVelocity + k2 * dt_s / 2) + (currentVelocity + k3 * dt_s));
+        nextVelocity = currentVelocity + dt_s / 6 * (k1 + 2 * k2 + 2 * k3 + k4);
     end
 end
 
-function velocity = captured_orbit_velocity(position, incomingVelocity, altitude_m, config)
-radius = norm(position);
-periapsisAltitude_m = max(altitude_m, config.mission.trajectoryLunarPeriapsisAltitude_m);
-periapsisRadius = config.physics.moonRadius_m + periapsisAltitude_m;
-radial = position / max(radius, 1);
-angularMomentum = cross(position, incomingVelocity);
-if norm(angularMomentum) < eps
-    normal = [0; 0; 1];
+function value = orbit_lunar_step(config)
+if isfield(config.integrator, 'lunarStep_s')
+    value = min(config.integrator.highFidelityStep_s, config.integrator.lunarStep_s);
 else
-    normal = angularMomentum / norm(angularMomentum);
+    value = config.integrator.highFidelityStep_s;
 end
-tangential = cross(normal, radial);
-tangential = tangential / max(norm(tangential), 1);
-if dot(tangential, incomingVelocity) < 0
-    tangential = -tangential;
 end
-if radius > periapsisRadius
-    semiMajorAxis = (radius + periapsisRadius) / 2;
-    speed = sqrt(config.physics.muMoon_m3ps2 * (2 / radius - 1 / semiMajorAxis));
-else
-    speed = sqrt(config.physics.muMoon_m3ps2 / max(radius, 1));
+
+function [finalPosition_m, finalVelocity_mps] = propagate_finite_burn(position_m, velocity_mps, deltaV_mps, duration_s, step_s, config)
+finalPosition_m = position_m;
+finalVelocity_mps = velocity_mps;
+elapsed_s = 0;
+while elapsed_s < duration_s - 1e-9
+    dt_s = min(step_s, duration_s - elapsed_s);
+    k1 = moon_gravity(finalPosition_m, config) + burn_profile(elapsed_s, duration_s) * deltaV_mps;
+    k2 = moon_gravity(finalPosition_m + finalVelocity_mps * dt_s / 2, config) + burn_profile(elapsed_s + dt_s / 2, duration_s) * deltaV_mps;
+    k3 = moon_gravity(finalPosition_m + (finalVelocity_mps + k1 * dt_s / 2) * dt_s / 2, config) + burn_profile(elapsed_s + dt_s / 2, duration_s) * deltaV_mps;
+    k4 = moon_gravity(finalPosition_m + (finalVelocity_mps + k2 * dt_s / 2) * dt_s, config) + burn_profile(elapsed_s + dt_s, duration_s) * deltaV_mps;
+    finalPosition_m = finalPosition_m + dt_s / 6 * (finalVelocity_mps + 2 * (finalVelocity_mps + k1 * dt_s / 2) + 2 * (finalVelocity_mps + k2 * dt_s / 2) + (finalVelocity_mps + k3 * dt_s));
+    finalVelocity_mps = finalVelocity_mps + dt_s / 6 * (k1 + 2 * k2 + 2 * k3 + k4);
+    elapsed_s = elapsed_s + dt_s;
 end
-velocity = tangential * speed;
+end
+
+function acceleration_mps2 = moon_gravity(position_m, config)
+acceleration_mps2 = -config.physics.muMoon_m3ps2 * position_m / max(norm(position_m), 1) ^ 3;
+end
+
+function value = burn_profile(elapsed_s, duration_s)
+if duration_s <= 0
+    value = 0;
+    return
+end
+normalizedTime = min(1, max(0, elapsed_s / duration_s));
+value = 30 * normalizedTime * (1 - normalizedTime) ^ 4 / duration_s;
+end
+
+function velocity_mps = capture_orbit_velocity(position_m, referenceVelocity_mps, orbitNormal, config)
+radialDirection = position_m / max(norm(position_m), 1);
+tangentialDirection = cross(orbitNormal, radialDirection);
+tangentialDirection = tangentialDirection / max(norm(tangentialDirection), 1);
+if dot(tangentialDirection, referenceVelocity_mps) < 0
+    tangentialDirection = -tangentialDirection;
+end
+velocity_mps = tangentialDirection * sqrt(config.physics.muMoon_m3ps2 / max(norm(position_m), 1));
 end

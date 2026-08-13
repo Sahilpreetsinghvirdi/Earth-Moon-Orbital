@@ -28,10 +28,13 @@ end
 config = output.config;
 trajectory = output.trajectory;
 if ~isfield(config.live, 'smoothPath')
-    config.live.smoothPath = true;
+    config.live.smoothPath = false;
 end
 if ~isfield(config.live, 'smoothSamplesPerPoint')
-    config.live.smoothSamplesPerPoint = 4;
+    config.live.smoothSamplesPerPoint = 1;
+end
+if ~isfield(config.live, 'lunarInsetLimit_m')
+    config.live.lunarInsetLimit_m = 20e6;
 end
 cameraMode = lower(string(cameraMode));
 figureHandle = figure('Name', 'V2 Live Earth-Moon Mission', 'NumberTitle', 'off', 'Color', 'w', 'Position', [60, 60, 1500, 850]);
@@ -62,7 +65,23 @@ outboundPathHandle = plot(axesHandle, nan, nan, '-', 'Color', [0.92, 0.22, 0.08]
 lunarPathHandle = plot(axesHandle, nan, nan, '-', 'Color', [0.10, 0.62, 0.36], 'LineWidth', 1.8);
 returnPathHandle = plot(axesHandle, nan, nan, '-', 'Color', [0.48, 0.22, 0.82], 'LineWidth', 1.8);
 spacecraftHandle = plot(axesHandle, nan, nan, 'o', 'MarkerFaceColor', [0.92, 0.22, 0.08], 'MarkerEdgeColor', 'k');
-infoHandle = uicontrol('Parent', figureHandle, 'Style', 'text', 'Units', 'normalized', 'Position', [0.72, 0.18, 0.25, 0.68], 'HorizontalAlignment', 'left', 'BackgroundColor', 'w', 'FontName', 'Consolas', 'FontSize', 10);
+lunarAxesHandle = axes('Parent', figureHandle, 'Position', [0.72, 0.59, 0.24, 0.30]);
+hold(lunarAxesHandle, 'on')
+grid(lunarAxesHandle, 'on')
+axis(lunarAxesHandle, 'equal')
+lunarLimit_m = config.live.lunarInsetLimit_m;
+xlim(lunarAxesHandle, [-lunarLimit_m, lunarLimit_m] / 1e6)
+ylim(lunarAxesHandle, [-lunarLimit_m, lunarLimit_m] / 1e6)
+xlabel(lunarAxesHandle, 'Moon-centered x (10^6 m)')
+ylabel(lunarAxesHandle, 'Moon-centered y (10^6 m)')
+title(lunarAxesHandle, 'Fixed lunar operations view')
+fill(lunarAxesHandle, config.physics.moonRadius_m * cos(bodyAngle) / 1e6, config.physics.moonRadius_m * sin(bodyAngle) / 1e6, [0.65, 0.65, 0.68], 'EdgeColor', [0.25, 0.25, 0.25]);
+lunarOutboundHandle = plot(lunarAxesHandle, nan, nan, '-', 'Color', [0.92, 0.22, 0.08], 'LineWidth', 1.8);
+lunarOrbitHandle = plot(lunarAxesHandle, nan, nan, '-', 'Color', [0.10, 0.62, 0.36], 'LineWidth', 1.8);
+lunarReturnHandle = plot(lunarAxesHandle, nan, nan, '-', 'Color', [0.10, 0.40, 0.90], 'LineWidth', 1.8);
+lunarSpacecraftHandle = plot(lunarAxesHandle, nan, nan, 'o', 'MarkerFaceColor', [0.92, 0.22, 0.08], 'MarkerEdgeColor', 'k');
+set(returnPathHandle, 'Color', [0.10, 0.40, 0.90])
+infoHandle = uicontrol('Parent', figureHandle, 'Style', 'text', 'Units', 'normalized', 'Position', [0.72, 0.16, 0.25, 0.34], 'HorizontalAlignment', 'left', 'BackgroundColor', 'w', 'FontName', 'Consolas', 'FontSize', 10);
 frameStride = max(1, round(config.live.frameStride));
 frameIndices = unique([1:frameStride:numel(trajectory.time_s), numel(trajectory.time_s)]);
 for frameIndex = 1:numel(frameIndices)
@@ -83,6 +102,9 @@ for frameIndex = 1:numel(frameIndices)
         set_phase_paths(outboundPathHandle, lunarPathHandle, returnPathHandle, trajectory.position_m(1:index, :), trajectory.time_s(1:index), trajectory.phase(1:index), config.live)
         set(spacecraftHandle, 'XData', trajectory.position_m(index, 1) / 1e6, 'YData', trajectory.position_m(index, 2) / 1e6)
     end
+    lunarRelativePath_m = trajectory.position_m(1:index, :) - trajectory.moonPosition_m(1:index, :);
+    set_phase_paths(lunarOutboundHandle, lunarOrbitHandle, lunarReturnHandle, lunarRelativePath_m, trajectory.time_s(1:index), trajectory.phase(1:index), config.live)
+    set(lunarSpacecraftHandle, 'XData', lunarRelativePath_m(end, 1) / 1e6, 'YData', lunarRelativePath_m(end, 2) / 1e6)
     info = sprintf('MISSION DATE\n%s\n\nElapsed: %.3f days\nVelocity: %.2f m/s\nEarth distance: %.2f km\nMoon distance: %.2f km\nCurrent delta-v: %.2f m/s\nPhase: %s\nView: %s', char(trajectory.epoch(index)), trajectory.time_s(index) / 86400, norm(trajectory.velocity_mps(index, :)), trajectory.earthDistance_m(index) / 1000, trajectory.moonDistance_m(index) / 1000, cumulative_delta_v(output.optimization.bestResult, trajectory.time_s(index), trajectory), char(trajectory.phase(index)), viewName);
     set(infoHandle, 'String', info)
     drawnow limitrate
@@ -93,12 +115,23 @@ end
 end
 
 function set_phase_paths(outboundHandle, lunarHandle, returnHandle, position_m, time_s, phase, liveConfig)
-outboundMask = startsWith(phase, "Earth departure") | startsWith(phase, "Lunar approach");
-lunarMask = startsWith(phase, "Lunar capture") | startsWith(phase, "Lunar orbit");
-returnMask = startsWith(phase, "Lunar departure") | startsWith(phase, "Earth terminal");
+outboundMask = startsWith(phase, "Earth departure") | startsWith(phase, "Lunar approach") | startsWith(phase, "Lunar capture");
+lunarMask = startsWith(phase, "Lunar orbit") | startsWith(phase, "Lunar departure phasing");
+returnMask = startsWith(phase, "Lunar departure burn") | startsWith(phase, "Lunar departure and Earth return") | startsWith(phase, "Earth terminal");
+outboundMask = connected_mask(outboundMask);
+lunarMask = connected_mask(lunarMask);
+returnMask = connected_mask(returnMask);
 set_path(outboundHandle, position_m(outboundMask, :), time_s(outboundMask), liveConfig)
 set_path(lunarHandle, position_m(lunarMask, :), time_s(lunarMask), liveConfig)
 set_path(returnHandle, position_m(returnMask, :), time_s(returnMask), liveConfig)
+end
+
+function value = connected_mask(mask)
+value = mask;
+firstIndex = find(mask, 1, 'first');
+if ~isempty(firstIndex) && firstIndex > 1
+    value(firstIndex - 1) = true;
+end
 end
 
 function set_path(handle, position_m, time_s, liveConfig)
