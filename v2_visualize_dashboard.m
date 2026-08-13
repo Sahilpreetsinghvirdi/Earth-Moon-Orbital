@@ -8,18 +8,24 @@ axesHandle = subplot(2, 2, 1, 'Parent', figureHandle);
 hold(axesHandle, 'on')
 earthAngle = linspace(0, 2 * pi, 240);
 fill(axesHandle, config.physics.earthRadius_m * cos(earthAngle) / 1e6, config.physics.earthRadius_m * sin(earthAngle) / 1e6, [0.15, 0.40, 0.78], 'EdgeColor', [0.03, 0.12, 0.30])
-plot(axesHandle, trajectory.position_m(:, 1) / 1e6, trajectory.position_m(:, 2) / 1e6, 'Color', [0.92, 0.22, 0.08], 'LineWidth', 1.4)
-plot(axesHandle, trajectory.moonPosition_m(:, 1) / 1e6, trajectory.moonPosition_m(:, 2) / 1e6, '--', 'Color', [0.50, 0.50, 0.50], 'LineWidth', 1.0)
-plot(axesHandle, trajectory.position_m(end, 1) / 1e6, trajectory.position_m(end, 2) / 1e6, 'o', 'MarkerFaceColor', [0.92, 0.22, 0.08], 'MarkerEdgeColor', 'k')
+outboundMask = startsWith(trajectory.phase, "Earth departure") | startsWith(trajectory.phase, "Lunar approach") | startsWith(trajectory.phase, "Lunar capture");
+transferPosition_m = trajectory.position_m(outboundMask, :);
+transferMoonPosition_m = trajectory.moonPosition_m(outboundMask, :);
+plot(axesHandle, transferPosition_m(:, 1) / 1e6, transferPosition_m(:, 2) / 1e6, 'Color', [0.92, 0.22, 0.08], 'LineWidth', 1.6)
+plot(axesHandle, transferMoonPosition_m(:, 1) / 1e6, transferMoonPosition_m(:, 2) / 1e6, '--', 'Color', [0.50, 0.50, 0.50], 'LineWidth', 1.0)
+encounterIndex = find(outboundMask, 1, 'last');
+moonEncounter_m = trajectory.moonPosition_m(encounterIndex, :);
+fill(axesHandle, (moonEncounter_m(1) + config.physics.moonRadius_m * cos(earthAngle)) / 1e6, (moonEncounter_m(2) + config.physics.moonRadius_m * sin(earthAngle)) / 1e6, [0.65, 0.65, 0.68], 'EdgeColor', [0.25, 0.25, 0.25])
+plot(axesHandle, transferPosition_m(end, 1) / 1e6, transferPosition_m(end, 2) / 1e6, 'o', 'MarkerFaceColor', [0.92, 0.22, 0.08], 'MarkerEdgeColor', 'k')
 axis(axesHandle, 'equal')
-axisLimit_m = max(1.05 * config.physics.moonSOI_m, max(abs([trajectory.position_m(:); trajectory.moonPosition_m(:)])) * 1.05);
+axisLimit_m = max(1.05 * config.physics.moonSOI_m, max(abs([transferPosition_m(:); transferMoonPosition_m(:)])) * 1.05);
 xlim(axesHandle, [-axisLimit_m, axisLimit_m] / 1e6)
 ylim(axesHandle, [-axisLimit_m, axisLimit_m] / 1e6)
 grid(axesHandle, 'on')
 xlabel(axesHandle, 'Earth-centered x (10^6 m)')
 ylabel(axesHandle, 'Earth-centered y (10^6 m)')
-title(axesHandle, 'Best calculated trajectory')
-legend(axesHandle, {'Earth', 'Spacecraft', 'Moon path', 'Final state'}, 'Location', 'best')
+title(axesHandle, 'Earth-to-Moon translunar trajectory')
+legend(axesHandle, {'Earth', 'Spacecraft transfer', 'Moon path', 'Moon at encounter', 'Lunar arrival'}, 'Location', 'best')
 axesHandle = subplot(2, 2, 2, 'Parent', figureHandle);
 plot(axesHandle, optimization.history.iteration, optimization.history.bestDeltaV_mps, 'Color', [0.12, 0.45, 0.72], 'LineWidth', 1.5)
 grid(axesHandle, 'on')

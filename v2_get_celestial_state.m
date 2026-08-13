@@ -5,7 +5,7 @@ end
 epoch = v2_as_datetime(epoch);
 body = lower(string(body));
 state = struct('epoch', epoch, 'body', char(body), 'position_m', zeros(3, 1), 'velocity_mps', zeros(3, 1), 'source', config.ephemeris.source, 'isHighFidelity', false);
-if config.ephemeris.allowToolbox && ~strcmpi(mode, 'analytical') && exist('planetEphemeris', 'file') == 2 && body == "moon"
+if config.ephemeris.allowToolbox && ~config.ephemeris.planar2D && ~strcmpi(mode, 'analytical') && exist('planetEphemeris', 'file') == 2 && body == "moon"
     try
         jd = juliandate(epoch);
         [position_m, velocity_mps] = planetEphemeris(jd, 'Earth', 'Moon', '432t');
@@ -35,6 +35,11 @@ e = 0.0549;
 i_rad = deg2rad(5.145);
 raan_rad = deg2rad(125.08);
 argument_rad = deg2rad(318.15);
+if config.ephemeris.planar2D
+    i_rad = 0;
+    raan_rad = 0;
+    argument_rad = 0;
+end
 meanAnomalyJ2000_rad = deg2rad(115.3654);
 period_s = config.physics.moonSiderealPeriod_s;
 elapsed_s = seconds(epoch - config.ephemeris.j2000);

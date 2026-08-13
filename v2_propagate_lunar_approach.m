@@ -23,7 +23,7 @@ valid = false(stepCount, 1);
 moonStart = v2_get_celestial_state(startEpoch, 'moon', config, 'analytical');
 relativePosition = initialState.position_m(:) - moonStart.position_m;
 relativeVelocity = initialState.velocity_mps(:) - moonStart.velocity_mps;
-approachTargetAltitude_m = altitude_m + 400000;
+approachTargetAltitude_m = altitude_m + config.mission.lunarApproachSafetyAltitude_m;
 targetPosition = target_periapsis_position(relativePosition, relativeVelocity, approachTargetAltitude_m, config);
 transfer = v2_solve_lambert(relativePosition, targetPosition, duration_s, config.physics.muMoon_m3ps2, true);
 if transfer.valid

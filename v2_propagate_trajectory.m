@@ -1,4 +1,4 @@
-function trajectory = v2_propagate_trajectory(config, startEpoch, initialState, duration_s, phaseName, callback, stopFunction, targetVelocity_mps, targetBurnDuration_s)
+function trajectory = v2_propagate_trajectory(config, startEpoch, initialState, duration_s, phaseName, callback, stopFunction, targetVelocity_mps, targetBurnDuration_s, burnMode)
 if nargin < 6 || isempty(callback)
     callback = @(~) true;
 end
@@ -10,6 +10,9 @@ if nargin < 8
 end
 if nargin < 9 || isempty(targetBurnDuration_s)
     targetBurnDuration_s = 0;
+end
+if nargin < 10 || isempty(burnMode)
+    burnMode = "velocity-guidance";
 end
 step_s = config.integrator.highFidelityStep_s;
 stepCount = min(ceil(duration_s / step_s) + 1, config.integrator.maxSteps);
@@ -98,8 +101,13 @@ end
         [totalAcceleration, diagnostics] = v2_acceleration(config, currentEpoch, currentPosition, currentVelocity);
         if ~isempty(targetVelocity_mps) && targetBurnDuration_s > 0 && timeValue_s <= targetBurnDuration_s
             normalizedTime = min(1, max(0, timeValue_s / targetBurnDuration_s));
-            desiredDerivative = (6 * normalizedTime - 6 * normalizedTime ^ 2) * (targetVelocity_mps(:) - initialState.velocity_mps(:)) / targetBurnDuration_s;
-            totalAcceleration = desiredDerivative;
+            if string(burnMode) == "delta-v"
+                burnProfile = 30 * normalizedTime * (1 - normalizedTime) ^ 4 / targetBurnDuration_s;
+                totalAcceleration = totalAcceleration + burnProfile * targetVelocity_mps(:);
+            else
+                burnProfile = (6 * normalizedTime - 6 * normalizedTime ^ 2) / targetBurnDuration_s;
+                totalAcceleration = burnProfile * (targetVelocity_mps(:) - initialState.velocity_mps(:));
+            end
         end
     end
 end

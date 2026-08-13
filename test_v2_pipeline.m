@@ -44,6 +44,9 @@ assert(trajectory.lunarOrbitValid)
 assert(trajectory.lunarOrbitMinimumDistance_m < 10e6)
 assert(any(strcmp(trajectory.phase, 'Earth departure and lunar transfer burn')))
 assert(abs(norm(trajectory.velocity_mps(1, :)) - norm(candidateResult.earthParkingVelocity_mps)) < 1e-6)
+outboundMask = startsWith(trajectory.phase, "Earth departure") | startsWith(trajectory.phase, "Lunar approach");
+assert(max(trajectory.earthDistance_m(outboundMask)) > 3e8)
+assert(min(trajectory.moonDistance_m(outboundMask)) < config.physics.moonSOI_m)
 statePath = v2_save_mission_state(config, optimization, trajectory);
 assert(exist(statePath, 'file') == 2)
 [loadedState, ~] = v2_load_mission_state(config);

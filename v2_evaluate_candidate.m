@@ -14,19 +14,16 @@ moonLaunch = v2_get_celestial_state(launchEpoch, 'moon', config);
 moonArrival = v2_get_celestial_state(arrivalEpoch, 'moon', config);
 moonDeparture = v2_get_celestial_state(departureEpoch, 'moon', config);
 earthReturn = v2_get_celestial_state(returnEpoch, 'earth', config);
-earthParkingRadialDirection = moonLaunch.position_m / norm(moonLaunch.position_m);
-earthParkingPosition_m = config.physics.earthParkingRadius_m * earthParkingRadialDirection;
-earthParkingSpeed_mps = sqrt(config.physics.muEarth_m3ps2 / config.physics.earthParkingRadius_m);
-earthParkingTangentialDirection = cross([0; 0; 1], earthParkingRadialDirection);
-earthParkingTangentialDirection = earthParkingTangentialDirection / norm(earthParkingTangentialDirection);
-earthParkingVelocity_mps = earthParkingSpeed_mps * earthParkingTangentialDirection;
 moonArrivalRadialDirection = -moonArrival.position_m / norm(moonArrival.position_m);
-moonArrivalInterfacePosition_m = moonArrival.position_m + moonArrivalRadialDirection * config.physics.moonSOI_m;
-outbound = v2_solve_lambert(earthParkingPosition_m, moonArrivalInterfacePosition_m, candidate.outboundFlightTime_days * 86400, config.physics.muEarth_m3ps2, true);
-if ~outbound.valid
-    result.rejectReason = ['Outbound Lambert failure: ', outbound.message];
+moonArrivalInterfacePosition_m = moonArrival.position_m + moonArrivalRadialDirection * config.mission.lunarApproachStartDistance_m;
+earthDeparture = v2_select_translunar_departure(config, moonArrivalInterfacePosition_m, candidate.outboundFlightTime_days * 86400);
+if ~earthDeparture.valid
+    result.rejectReason = 'No prograde trans-lunar departure solution';
     return
 end
+earthParkingPosition_m = earthDeparture.position_m;
+earthParkingVelocity_mps = earthDeparture.velocity_mps;
+outbound = earthDeparture.lambert;
 moonArrivalVelocity_mps = outbound.velocity2_mps - moonArrival.velocity_mps;
 outboundVInf_mps = norm(moonArrivalVelocity_mps);
 moonArrivalDirection_m = moonArrivalInterfacePosition_m - moonArrival.position_m;
@@ -63,7 +60,7 @@ flightTimeQuality = max(0, 1 - flightTime_days / config.mission.maximumFlightTim
 constraints = struct;
 constraints.outboundLambertValid = outbound.valid;
 constraints.returnLambertValid = returnTransfer.valid;
-constraints.departureOutwardValid = dot(outbound.velocity1_mps, earthParkingRadialDirection) > 0;
+constraints.departureOutwardValid = dot(outbound.velocity1_mps - earthParkingVelocity_mps, earthParkingVelocity_mps) > 0 && earthDeparture.radialVelocity_mps >= -250;
 constraints.moonApproachValid = moonApproachValid;
 constraints.moonDepartureOutwardValid = moonDepartureOutwardValid;
 constraints.lunarPeriapsisValid = candidate.lunarOrbitAltitude_m >= config.mission.minimumLunarPeriapsisAltitude_m && candidate.lunarOrbitAltitude_m <= config.mission.maximumLunarPeriapsisAltitude_m;
@@ -117,6 +114,7 @@ result = populate_result(result);
         output.constraints = constraints;
         output.earthParkingPosition_m = earthParkingPosition_m;
         output.earthParkingVelocity_mps = earthParkingVelocity_mps;
+        output.earthDeparture = earthDeparture;
         output.earthArrivalPosition_m = earthArrivalPosition_m;
     end
 end
