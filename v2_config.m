@@ -1,0 +1,103 @@
+function config = v2_config(varargin)
+config = struct;
+config.name = 'V2 Earth-Moon Mission and Optimal Trajectory Simulator';
+config.version = '2.0.0';
+config.epoch = datetime('now', 'TimeZone', 'UTC');
+config.searchStartEpoch = config.epoch;
+config.searchEndEpoch = config.epoch + calmonths(18);
+config.randomSeed = 42;
+config.randomized = false;
+config.ephemeris = struct;
+config.ephemeris.source = 'analytical-mean-lunar-elements-v2';
+config.ephemeris.preferredToolbox = 'Aerospace Toolbox planetEphemeris when available';
+config.ephemeris.allowToolbox = true;
+config.ephemeris.planar2D = true;
+config.ephemeris.j2000 = datetime(2000, 1, 1, 12, 0, 0, 'TimeZone', 'UTC');
+config.physics = struct;
+config.physics.g0_mps2 = 9.80665;
+config.physics.muEarth_m3ps2 = 3.986004418e14;
+config.physics.muMoon_m3ps2 = 4.9048695e12;
+config.physics.muSun_m3ps2 = 1.32712440018e20;
+config.physics.earthRadius_m = 6378137;
+config.physics.moonRadius_m = 1737400;
+config.physics.earthParkingRadius_m = 6678137;
+config.physics.moonParkingAltitude_m = 100000;
+config.physics.moonParkingRadius_m = config.physics.moonRadius_m + config.physics.moonParkingAltitude_m;
+config.physics.earthSOI_m = 9.24e8;
+config.physics.moonSOI_m = 6.6169e7;
+config.physics.astronomicalUnit_m = 149597870700;
+config.physics.earthYear_s = 365.256363004 * 86400;
+config.physics.moonSiderealPeriod_s = 27.321661 * 86400;
+config.vehicle = struct;
+config.vehicle.initialMass_kg = 600000;
+config.vehicle.dryMass_kg = 8000;
+config.vehicle.engineIsp_s = 450;
+config.vehicle.maxPropellant_kg = config.vehicle.initialMass_kg - config.vehicle.dryMass_kg;
+config.vehicle.maxMissionDeltaV_mps = 17000;
+config.mission = struct;
+config.mission.outboundFlightTime_days = [3.0, 4.0, 5.0, 6.0];
+config.mission.returnFlightTime_days = [2.0, 2.5];
+config.mission.lunarApproachDuration_days = 0.5;
+config.mission.lunarApproachStartDistance_m = 15e6;
+config.mission.lunarApproachSafetyAltitude_m = 0;
+config.mission.lunarOrbitDuration_days = 1.0;
+config.mission.minimumLunarOrbitDuration_days = 0.25;
+config.mission.captureBurnDuration_s = 600;
+config.mission.departureBurnDuration_s = 600;
+config.mission.earthDepartureBurnDuration_s = 480;
+config.mission.departurePhasingWindow_s = 21600;
+config.mission.earthTerminalCorrectionDuration_s = 21600;
+config.mission.earthTerminalBurnDuration_s = 1800;
+config.mission.minimumLunarPeriapsisAltitude_m = 50000;
+config.mission.maximumLunarPeriapsisAltitude_m = 500000;
+config.mission.maximumLunarApoapsisAltitude_m = 2000000;
+config.mission.trajectoryLunarPeriapsisAltitude_m = 300000;
+config.mission.maximumEarthArrivalSpeed_mps = 12500;
+config.mission.maximumEarthArrivalDistance_m = 100000000;
+config.mission.maximumFlightTime_days = 45;
+config.mission.maxCandidates = 1800;
+config.mission.maxRuntime_s = 180;
+config.mission.convergenceTolerance_mps = 0.25;
+config.mission.coarseStep_days = 1;
+config.mission.refineStep_hours = 12;
+config.mission.finalStep_minutes = 30;
+config.mission.topWindowCount = 6;
+config.mission.refinementRadius_days = 14;
+config.mission.penaltyInvalid = -1e12;
+config.mission.scoreWeights = struct('fuel', 0.70, 'feasibility', 0.15, 'orbit', 0.08, 'returnSafety', 0.05, 'flightTime', 0.02);
+config.integrator = struct;
+config.integrator.step_s = 120;
+config.integrator.highFidelityStep_s = 120;
+config.integrator.lunarStep_s = 30;
+config.integrator.maxSteps = 200000;
+config.integrator.includeSunGravity = true;
+config.optimizer = struct;
+config.optimizer.useParallel = true;
+config.optimizer.maxIterations = 1800;
+config.optimizer.showProgress = true;
+config.optimizer.saveEveryIteration = true;
+config.output = struct;
+config.output.directory = 'results';
+config.output.stateFile = 'mission_state.mat';
+config.output.resultFile = 'v2_optimization_results.mat';
+config.output.reportFile = 'v2_mission_report.txt';
+config.output.dashboardFigure = 'v2_optimization_dashboard.png';
+config.output.trajectoryFigure = 'v2_best_trajectory.png';
+config.live = struct('frameStride', 4, 'pause_s', 0.01, 'speedFactor', 100000, 'cameraMode', 'earth', 'smoothPath', false, 'smoothSamplesPerPoint', 1, 'lunarInsetLimit_m', 20e6);
+if nargin > 0 && ~isempty(varargin{1})
+    config = apply_overrides(config, varargin{1});
+end
+end
+
+function output = apply_overrides(base, overrides)
+output = base;
+names = fieldnames(overrides);
+for index = 1:numel(names)
+    name = names{index};
+    if isstruct(overrides.(name)) && isfield(output, name)
+        output.(name) = apply_overrides(output.(name), overrides.(name));
+    else
+        output.(name) = overrides.(name);
+    end
+end
+end
