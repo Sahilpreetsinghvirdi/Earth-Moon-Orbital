@@ -1,166 +1,162 @@
 function generate_artemis2_result()
-% GENERATE_ARTEMIS2_RESULT  Create a synthetic Artemis-II style mission result
-%   This generator now synthesizes a mission that departs Earth, performs a
-%   lunar approach, inserts into a short lunar orbit (revolves around the
-%   Moon), then departs and returns to Earth for a safe arrival.  The
-%   produced output is intended for visualization and teaching only.
+% GENERATE_ARTEMIS2_RESULT  Physics-based Artemis-II style mission generator
+%   Builds a simple physics-consistent mission using v2_solve_lambert and the
+%   propagator helpers. This produces a plausible Earth->Moon transfer, a
+%   short circular lunar orbit (insertion), and a Moon->Earth return.
+%   The output is saved to results/v2_optimization_results.mat and replayed
+%   with the existing run_v2_live visualizer.
 
 config = v2_config();
-config.live.speedFactor = 50000;
+config.live.speedFactor = 30000;
 config.live.cameraMode = 'earth';
 
-% Mission timing
+% Mission parameters (adjustable)
 launchEpoch = datetime(2026,11,1,0,0,0,'TimeZone','UTC');
-outboundDays = 5;         % Earth->Moon transfer days
-orbitDays = 1.5;           % days spent in lunar orbit (short)
-returnDays = 6;           % Moon->Earth transfer days
-flightDays = outboundDays + orbitDays + returnDays;
-N = 1400;
+outboundDays = 4.5;    % Earth->Moon transfer
+lunarOrbitDays = 1.0;  % time spent in lunar orbit
+returnDays = 6.0;      % Moon->Earth return
 
-% Time base
-time_s = linspace(0, flightDays*86400, N)';
+% burn durations (s)
+transferBurnDuration_s = 600;
+insertionBurnDuration_s = 600;
+departureBurnDuration_s = 600;
+
+% Build epochs and durations
+outboundDuration_s = outboundDays * 86400;
+orbitDuration_s = lunarOrbitDays * 86400;
+returnDuration_s = returnDays * 86400;
+flightDuration_s = outboundDuration_s + orbitDuration_s + returnDuration_s;
+N = 1600;
+
+% Time series
+time_s = linspace(0, flightDuration_s, N)';
 epoch = launchEpoch + seconds(time_s);
 
-% Preallocate
-position_m = nan(N,3);
-velocity_mps = nan(N,3);
-moonPosition_m = nan(N,3);
+% Earth parking initial state (circular parking orbit in x-y plane)earth_r = config.physics.earthParkingRadius_m;
+earth_mu = config.physics.muEarth_m3ps2;
+earth_pos = [rearth_r; 0; 0];
+earth_vel = [0; sqrt(earth_mu / rearth_r); 0];
+initialState = struct('position_m', earth_pos, 'velocity_mps', earth_vel);
 
-% Indices for phases
-outbound_end = round(N * (outboundDays / flightDays));
-orbit_start = outbound_end + 1;
-orbit_end = round(N * ((outboundDays + orbitDays) / flightDays));
-return_start = orbit_end + 1;
+% Choose a nominal lunar approach point along the Moon-Earth line
+arrivalEpoch = launchEpoch + seconds(outboundDuration_s);
+arrivalMoon = v2_get_celestial_state(arrivalEpoch, 'moon', config, 'analytical');
+approachDistance_m = config.mission.lunarApproachStartDistance_m / 4; % closer approach point
+approachPoint = arrivalMoon.position_m + unit_vector(-arrivalMoon.position_m) * approachDistance_m;
 
-% Earth parking start position (simple planar starting point)
-earthStart = [config.physics.earthParkingRadius_m; 0; 0];
+% Solve Lambert outbound
+outboundLambert = v2_solve_lambert(earth_pos, approachPoint, outboundDuration_s, earth_mu, true);
+if ~outboundLambert.valid
+    error('generate_artemis2_result:LambertFailed', 'Outbound Lambert solution failed')
+end
+departureDeltaV = outboundLambert.velocity1_mps - earth_vel;
 
-% Choose an approach offset relative to Moon (periapsis vector)
-approachOffset_m = -config.mission.lunarApproachStartDistance_m / 3; % closer than start distance
+% Propagate outbound transfer applying initial departure burn as delta-v over burn duration
+outboundSegment = v2_propagate_trajectory(config, launchEpoch, initialState, outboundDuration_s, 'Earth departure and lunar transfer', [], @() false, departureDeltaV, transferBurnDuration_s, 'delta-v');
+if isempty(outboundSegment.position_m)
+    error('generate_artemis2_result:PropagationFailed', 'Outbound propagation failed')
+end
 
-% Lunar orbit parameters (relative to Moon)
-lunarOrbitAltitude_m = 200e3; % 200 km circular lunar orbit
+% At arrival: compute lunar insertion burn to circular lunar orbit
+arrivalIndex = size(outboundSegment.position_m,1);
+scArrivalPos = outboundSegment.position_m(end, :)';
+scArrivalVel = outboundSegment.velocity_mps(end, :)';
+moonAtArrival = v2_get_celestial_state(outboundSegment.epoch(end), 'moon', config, 'analytical');
+relPos = scArrivalPos - moonAtArrival.position_m;
+relDist = norm(relPos);
+
+% Desired circular orbit radius and velocity about Moon
+lunarOrbitAltitude_m = 150e3;
 lunarOrbitRadius_m = config.physics.moonRadius_m + lunarOrbitAltitude_m;
+muMoon = config.physics.muMoon_m3ps2;
 
-% Build outbound segment (Earth to lunar approach)
-for i = 1:outbound_end
-    moon = v2_get_celestial_state(epoch(i), 'moon', config, 'analytical');
-    moonPosition_m(i,:) = moon.position_m(:)';
-    t = (i-1) / max(1, outbound_end-1);
-    % Interpolate in inertial frame from Earth parking to a point near the moon
-    approachPoint = moon.position_m(:)' + (approachOffset_m) * unit_vector(moon.position_m(:)');
-    position_m(i,:) = (1 - t) * earthStart(:)' + t * approachPoint;
+if relDist < lunarOrbitRadius_m
+    % If transfer ends inside desired orbit, set circular radius to current distance
+    lunarOrbitRadius_m = relDist + 1e3;
 end
 
-% Build lunar orbit segment (circular about the Moon in the Moon plane)
-for i = orbit_start:orbit_end
-    moon = v2_get_celestial_state(epoch(i), 'moon', config, 'analytical');
-    moonPosition_m(i,:) = moon.position_m(:)';
-    % theta around the Moon for one-plus revolutions depending on orbitDays
-    orbitFraction = (i - orbit_start) / max(1, orbit_end - orbit_start + 1);
-    % perform ~1.5 revolutions during the orbit window
-    theta = 2 * pi * (1.5 * orbitFraction);
-    localPos = lunarOrbitRadius_m * [cos(theta); sin(theta); 0];
-    position_m(i,:) = (moon.position_m(:) + localPos)';
+% Desired velocity in Moon-centered frame for circular orbit
+v_circ = sqrt(muMoon / lunarOrbitRadius_m);
+% Construct tangential direction (rotate radial by 90 deg in-plane)
+radial = relPos / max(norm(relPos),1);
+tangential = [ -radial(2); radial(1); 0 ];
+desiredVel_moon_frame = v_circ * tangential;
+% Convert to inertial by adding Moon velocity
+desiredVel_inertial = desiredVel_moon_frame + moonAtArrival.velocity_mps;
+
+% Compute insertion delta-v (vector)
+insertionDeltaV = desiredVel_inertial - scArrivalVel;
+
+% Propagate a short insertion burn (simulate capture)
+insertionStartState = struct('position_m', scArrivalPos, 'velocity_mps', scArrivalVel);
+insertionSegment = v2_propagate_trajectory(config, outboundSegment.epoch(end), insertionStartState, 0.5*86400, 'Lunar insertion and orbit', [], @() false, insertionDeltaV, insertionBurnDuration_s, 'delta-v');
+
+% If insertionSegment is empty, fall back to a small instant change
+if isempty(insertionSegment.position_m)
+    insertionStatePos = scArrivalPos;
+    insertionStateVel = scArrivalVel + insertionDeltaV;
+else
+    insertionStatePos = insertionSegment.position_m(end, :)';
+    insertionStateVel = insertionSegment.velocity_mps(end, :)';
 end
 
-% Build return segment (Moon to Earth)
-for i = return_start:N
-    moon = v2_get_celestial_state(epoch(i), 'moon', config, 'analytical');
-    moonPosition_m(i,:) = moon.position_m(:)';
-    t = (i - return_start) / max(1, N - return_start);
-    % Depart from a point near the Moon and interpolate back toward Earth parking
-    departPoint = moon.position_m(:)' + [lunarOrbitRadius_m + 1e6, 0, 0];
-    position_m(i,:) = (1 - t) * departPoint + t * earthStart(:)';
+% Propagate circular lunar orbit using v2_propagate_lunar_orbit for more realism
+orbitSegment = v2_propagate_lunar_orbit(config, insertionSegment.epoch(end), orbitDuration_s, lunarOrbitAltitude_m, [], @() false, struct('position_m', insertionStatePos, 'velocity_mps', insertionStateVel), desiredVel_inertial, insertionStateVel);
+
+% After orbit, compute departure Lambert back to Earth parking
+departureEpoch = orbitSegment.epoch(end);
+departureStatePos = orbitSegment.position_m(end, :)';
+departureStateVel = orbitSegment.velocity_mps(end, :)';
+
+% Choose Earth target position (parking) at arrival time
+earthArrivalEpoch = departureEpoch + seconds(returnDuration_s);
+earthTarget = earth_pos; % simple target
+
+returnLambert = v2_solve_lambert(departureStatePos, earthTarget, returnDuration_s, earth_mu, true);
+if ~returnLambert.valid
+    error('generate_artemis2_result:ReturnLambertFailed', 'Return Lambert solution failed')
 end
+returnDeltaV = returnLambert.velocity1_mps - departureStateVel;
 
-% Fill any remaining moonPosition_m entries
-for i = 1:N
-    if all(isnan(moonPosition_m(i,:)))
-        moon = v2_get_celestial_state(epoch(i), 'moon', config, 'analytical');
-        moonPosition_m(i,:) = moon.position_m(:)';
-    end
-end
+% Propagate return burn and coast
+returnSegment = v2_propagate_trajectory(config, departureEpoch, struct('position_m', departureStatePos, 'velocity_mps', departureStateVel), returnDuration_s, 'Lunar departure and Earth return', [], @() false, returnDeltaV, departureBurnDuration_s, 'delta-v');
 
-% Numerical velocity estimate (central difference)
-for i = 2:N-1
-    dt = time_s(i+1) - time_s(i-1);
-    velocity_mps(i,:) = (position_m(i+1,:) - position_m(i-1,:)) / dt;
-end
-velocity_mps(1,:) = velocity_mps(2,:);
-velocity_mps(end,:) = velocity_mps(end-1,:);
+% Assemble full trajectory by concatenation
+trajectory = concatenate_segments(outboundSegment, insertionSegment, orbitSegment, returnSegment);
 
-% Distances
-moonDistance_m = vecnorm(position_m - moonPosition_m, 2, 2);
-earthDistance_m = vecnorm(position_m, 2, 2);
-
-% Phase labels for visualization
-phase = repmat(string('Earth departure and lunar transfer'), N, 1);
-phase(orbit_start:orbit_end) = string('Lunar orbit');
-phase(orbit_end+1:end) = string('Lunar departure and Earth return');
-
-% Synthetic burn events (insertion and departure)
-burnEpochs = [launchEpoch, epoch(outbound_end), epoch(orbit_end)];
-burnDeltaV = [9500, 110, 900]; % m/s (departure, insertion, departure)
-
-burnEvents = struct('epoch', cell(1,numel(burnEpochs)), 'name', cell(1,numel(burnEpochs)), 'deltaV_mps', cell(1,numel(burnEpochs)));
-for k = 1:numel(burnEpochs)
-    burnEvents(k).epoch = burnEpochs(k);
-    burnEvents(k).name = char(['Burn ' num2str(k)]);
-    burnEvents(k).deltaV_mps = burnDeltaV(k);
-end
-
-% Build optimization.bestResult stub (reflects lunar orbit)
+% Build optimization.bestResult stub
 bestResult = struct();
 bestResult.valid = true;
-bestResult.candidate = struct('outboundFlightTime_days', outboundDays, 'lunarApproachDuration_days', 0.5, 'lunarOrbitDuration_days', orbitDays, 'launchEpoch', launchEpoch);
-bestResult.departureDeltaV_mps = burnDeltaV(1);
-bestResult.lunarOrbitInsertionDeltaV_mps = burnDeltaV(2);
-bestResult.lunarDepartureDeltaV_mps = burnDeltaV(3);
+bestResult.candidate = struct('outboundFlightTime_days', outboundDays, 'lunarApproachDuration_days', 0.5, 'lunarOrbitDuration_days', lunarOrbitDays, 'launchEpoch', launchEpoch);
+bestResult.departureDeltaV_mps = norm(departureDeltaV);
+bestResult.lunarOrbitInsertionDeltaV_mps = norm(insertionDeltaV);
+bestResult.lunarDepartureDeltaV_mps = norm(returnDeltaV);
 bestResult.earthCaptureDeltaV_mps = 0;
-bestResult.totalDeltaV_mps = sum(burnDeltaV);
+bestResult.totalDeltaV_mps = bestResult.departureDeltaV_mps + bestResult.lunarOrbitInsertionDeltaV_mps + bestResult.lunarDepartureDeltaV_mps;
 bestResult.fuel = struct('requiredPropellant_kg', 150000);
 
-% Build trajectory struct
-trajectory = struct();
-trajectory.time_s = time_s;
-trajectory.epoch = epoch;
-trajectory.position_m = position_m;
-trajectory.velocity_mps = velocity_mps;
-trajectory.acceleration_mps2 = nan(size(position_m));
-trajectory.moonPosition_m = moonPosition_m;
-trajectory.moonDistance_m = moonDistance_m;
-trajectory.earthDistance_m = earthDistance_m;
-trajectory.phase = phase;
-trajectory.valid = true(size(time_s));
+% Fill trajectory metadata used by visualizer
+trajectory.result = bestResult;
+trajectory.burnEvents = struct('epoch', {launchEpoch, outboundSegment.epoch(end), departureEpoch}, 'name', {'Earth departure', 'Lunar insertion', 'Lunar departure'}, 'deltaV_mps', {norm(departureDeltaV), norm(insertionDeltaV), norm(returnDeltaV)});
 trajectory.completed = true;
 trajectory.collision = false;
-trajectory.lunarSOIEntered = any(moonDistance_m <= config.physics.moonSOI_m);
-trajectory.lunarEncounterDistance_m = min(moonDistance_m);
-trajectory.lunarOrbitMinimumDistance_m = min(trajectory.moonDistance_m(orbit_start:orbit_end));
-trajectory.lunarOrbitPeriapsisAltitude_m = trajectory.lunarOrbitMinimumDistance_m - config.physics.moonRadius_m;
-trajectory.lunarOrbitBound = true;
+trajectory.lunarSOIEntered = any(trajectory.moonDistance_m <= config.physics.moonSOI_m);
 trajectory.lunarOrbitValid = true;
-trajectory.earthArrivalDistance_m = earthDistance_m(end);
-trajectory.earthArrivalSafe = true;
-trajectory.burnEvents = burnEvents;
-trajectory.result = bestResult;
-trajectory.actualDepartureEpoch = launchEpoch;
-trajectory.actualEarthArrivalEpoch = epoch(end);
+trajectory.lunarOrbitMinimumDistance_m = min(trajectory.moonDistance_m);
+trajectory.lunarOrbitPeriapsisAltitude_m = trajectory.lunarOrbitMinimumDistance_m - config.physics.moonRadius_m;
+trajectory.earthArrivalDistance_m = trajectory.earthDistance_m(end);
+trajectory.earthArrivalSafe = trajectory.earthArrivalDistance_m <= config.mission.maximumEarthArrivalDistance_m;
 
 optimization = struct('bestResult', bestResult, 'candidateResults', []);
 output = struct('config', config, 'optimization', optimization, 'trajectory', trajectory);
 
-% Ensure results directory exists
+% Save and visualize
 if ~exist(fullfile(pwd,'results'), 'dir')
     mkdir(fullfile(pwd,'results'));
 end
-
 save(fullfile(pwd, 'results', 'v2_optimization_results.mat'), 'output');
 
-fprintf('Synthetic Artemis-II mission (with lunar orbit) saved to results/v2_optimization_results.mat\n');
-
-% Launch visualizer
+fprintf('Physics-based Artemis-II mission saved to results/v2_optimization_results.mat\n');
 try
     run_v2_live(output, config.live.speedFactor, config.live.cameraMode);
 catch ME
